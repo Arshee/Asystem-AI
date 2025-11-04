@@ -1,16 +1,16 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { generatePublicationPlan, generateTitlesFromFilename, generateThumbnails, generateCategoryAndTags, searchRoyaltyFreeMusic } from '../services/geminiService';
 import type { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack } from '../types';
 import { LoadingSpinner } from './LoadingSpinner';
-import { UploadIcon, LightBulbIcon, SparklesIcon, VideoCameraIcon, TagIcon, MusicIcon, BrandingIcon, SearchIcon, CloseIcon, YouTubeIcon, TikTokIcon, InstagramIcon, FacebookIcon } from './Icons';
+import { UploadIcon, LightBulbIcon, SparklesIcon, VideoCameraIcon, TagIcon, MusicIcon, BrandingIcon, SearchIcon, CloseIcon, YouTubeIcon, TikTokIcon, InstagramIcon, FacebookIcon, ExternalLinkIcon } from './Icons';
 
 type VideoOrientation = 'landscape' | 'portrait';
-type SocialPlatform = 'youtube' | 'tiktok' | 'instagram' | 'facebook';
+type SocialPlatform = 'YouTube' | 'TikTok' | 'Instagram' | 'Facebook';
 
 const VideoAssistant: React.FC = () => {
   // Main Content State
   const [title, setTitle] = useState('');
+  const [titleInput, setTitleInput] = useState(''); // State for direct input value for debouncing
   const [categories, setCategories] = useState('');
   const [tone, setTone] = useState('profesjonalny');
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -24,15 +24,7 @@ const VideoAssistant: React.FC = () => {
   
   // Enhancements State
   const [selectedMusic, setSelectedMusic] = useState<MusicTrack | null>(null);
-  const [hasSubtitles, setHasSubtitles] = useState(true);
-
-  // Social Connect State
-  const [connectedAccounts, setConnectedAccounts] = useState<Record<SocialPlatform, boolean>>({
-    youtube: false,
-    tiktok: false,
-    instagram: false,
-    facebook: false,
-  });
+  const [publishingPlatforms, setPublishingPlatforms] = useState<Set<SocialPlatform>>(new Set(['YouTube', 'TikTok', 'Instagram']));
 
   // Music Search & Upload Modal State
   const [isMusicModalOpen, setIsMusicModalOpen] = useState(false);
@@ -61,12 +53,27 @@ const VideoAssistant: React.FC = () => {
   const [results, setResults] = useState<PublicationPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // UI State
+  const [copiedElement, setCopiedElement] = useState<string | null>(null);
+  const [activePublishTab, setActivePublishTab] = useState<SocialPlatform>('YouTube');
+
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Debounce effect for the title input
   useEffect(() => {
-    // Sync video player time with the slider
+    const handler = setTimeout(() => {
+      setTitle(titleInput);
+    }, 500); // 500ms delay after user stops typing
+
+    // Cleanup function to clear the timeout if the user types again
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [titleInput]);
+
+  useEffect(() => {
     if (videoRef.current) {
       videoRef.current.currentTime = thumbnailTimestamp;
     }
@@ -79,6 +86,7 @@ const VideoAssistant: React.FC = () => {
     setError(null);
     setCategoryAndTags(null);
     setTitle('');
+    setTitleInput('');
     setCategories('');
     setThumbnailTimestamp(1);
     setThumbnailOverlayText('');
@@ -92,6 +100,11 @@ const VideoAssistant: React.FC = () => {
           setVideoOrientation(videoWidth > videoHeight ? 'landscape' : 'portrait');
           setThumbnailTimestamp(1);
       }
+  };
+  
+  const handleSelectTitle = (newTitle: string) => {
+    setTitle(newTitle);
+    setTitleInput(newTitle);
   };
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,12 +120,13 @@ const VideoAssistant: React.FC = () => {
       try {
         const catAndTags = await generateCategoryAndTags(file.name);
         setCategoryAndTags(catAndTags);
-        setCategories(catAndTags.generalCategory); // Auto-fill category input
+        setCategories(catAndTags.generalCategory);
         setIsGeneratingCategories(false);
 
         const suggestions = await generateTitlesFromFilename(file.name, catAndTags.primaryKeyword);
         setTitleSuggestions(suggestions);
-        setTitle(suggestions.youtubeTitles[0] || '');
+        const firstTitle = suggestions.youtubeTitles[0] || '';
+        handleSelectTitle(firstTitle);
 
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Błąd podczas automatycznej analizy pliku.');
@@ -145,24 +159,38 @@ const VideoAssistant: React.FC = () => {
     }
   };
 
-  const handleSearchMusic = async () => {
-    if(!musicSearchQuery.trim()){
-        setMusicSearchError("Wpisz czego szukasz.");
-        return;
-    }
+  const handleSearchMusic = useCallback(async () => {
+    const trimmedQuery = musicSearchQuery.trim();
+    if (!trimmedQuery || isSearchingMusic) return;
+    
     setIsSearchingMusic(true);
     setMusicSearchError(null);
     setMusicSearchResults([]);
     try {
         const videoDescription = `${title} - ${categories}`;
-        const results = await searchRoyaltyFreeMusic(musicSearchQuery, videoDescription);
+        const results = await searchRoyaltyFreeMusic(trimmedQuery, videoDescription);
         setMusicSearchResults(results);
     } catch (err) {
         setMusicSearchError(err instanceof Error ? err.message : "Błąd podczas wyszukiwania muzyki.");
     } finally {
         setIsSearchingMusic(false);
     }
-  };
+  }, [musicSearchQuery, isSearchingMusic, title, categories]);
+
+  useEffect(() => {
+    const trimmedQuery = musicSearchQuery.trim();
+    if (trimmedQuery.length < 3) {
+        setMusicSearchResults([]);
+        setMusicSearchError(null);
+        return;
+    }
+
+    const debounceTimer = setTimeout(() => {
+        handleSearchMusic();
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [musicSearchQuery, handleSearchMusic]);
 
   const handleSelectMusic = (track: MusicTrack) => {
     setSelectedMusic(track);
@@ -188,10 +216,9 @@ const VideoAssistant: React.FC = () => {
         if (!ctx) throw new Error("Could not get canvas context");
         
         video.currentTime = thumbnailTimestamp;
-        
         await new Promise(res => setTimeout(res, 200));
-
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
         const frameFile = await new Promise<File | null>(resolve => 
             canvas.toBlob(blob => {
                 if(blob) resolve(new File([blob], "thumbnail_frame.jpg", { type: "image/jpeg" }));
@@ -222,25 +249,50 @@ const VideoAssistant: React.FC = () => {
     setError(null);
     setResults(null);
     try {
-      const plan = await generatePublicationPlan(title, categories, tone, selectedMusic, hasSubtitles);
+      const plan = await generatePublicationPlan(title, categories, tone, selectedMusic);
       setResults(plan);
+      const firstPlatform = [...publishingPlatforms][0] || 'YouTube';
+      setActivePublishTab(firstPlatform);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd.');
     } finally {
       setIsLoading(false);
     }
-  }, [title, categories, tone, videoFile, selectedMusic, hasSubtitles]);
+  }, [title, categories, tone, videoFile, selectedMusic, publishingPlatforms]);
 
-  const handleConnectAccount = (platform: SocialPlatform) => {
-    setConnectedAccounts(prev => ({...prev, [platform]: !prev[platform]}));
+  const handleCopyToClipboard = (text: string, elementId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedElement(elementId);
+    setTimeout(() => setCopiedElement(null), 2000);
   };
 
-  const socialPlatforms: { id: SocialPlatform; name: string; icon: React.ReactNode }[] = [
-    { id: 'youtube', name: 'YouTube', icon: <YouTubeIcon className="w-6 h-6" /> },
-    { id: 'tiktok', name: 'TikTok', icon: <TikTokIcon className="w-6 h-6" /> },
-    { id: 'instagram', name: 'Instagram', icon: <InstagramIcon className="w-6 h-6" /> },
-    { id: 'facebook', name: 'Facebook', icon: <FacebookIcon className="w-6 h-6" /> },
-  ];
+  const handlePlatformToggle = (platform: SocialPlatform) => {
+    setPublishingPlatforms(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(platform)) {
+            newSet.delete(platform);
+        } else {
+            newSet.add(platform);
+        }
+        return newSet;
+    });
+  };
+
+  const getPlatformIcon = (platform: string) => {
+    const p = platform.toLowerCase();
+    if (p.includes('youtube')) return <YouTubeIcon className="w-6 h-6" />;
+    if (p.includes('tiktok')) return <TikTokIcon className="w-6 h-6" />;
+    if (p.includes('instagram')) return <InstagramIcon className="w-6 h-6" />;
+    if (p.includes('facebook')) return <FacebookIcon className="w-6 h-6" />;
+    return null;
+  };
+  
+  const PlatformPublishingLinks: Record<SocialPlatform, string> = {
+    'YouTube': 'https://studio.youtube.com/channel/UC/videos?d=ud',
+    'TikTok': 'https://www.tiktok.com/upload',
+    'Instagram': 'https://www.instagram.com',
+    'Facebook': `https://www.facebook.com/creatorstudio/`,
+  };
 
   const MusicSearchModal = () => (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsMusicModalOpen(false)}>
@@ -344,46 +396,22 @@ const VideoAssistant: React.FC = () => {
                     {titleSuggestions && (
                         <div className="p-4 bg-base-300 rounded-lg space-y-3 animate-fade-in">
                             <h4 className="font-semibold text-gray-200 flex items-center gap-2"><SparklesIcon className="w-5 h-5 text-brand-primary"/> Sugerowane Tytuły</h4>
-                            {titleSuggestions.youtubeTitles.map((ytTitle, i) => (<div key={i} className="flex items-center justify-between text-sm"><span className="text-gray-300">YT: {ytTitle}</span><button type="button" onClick={() => setTitle(ytTitle)} className="text-xs bg-brand-primary text-base-100 font-semibold px-2 py-1 rounded-md hover:bg-brand-secondary">Użyj</button></div>))}
-                            <div className="flex items-center justify-between text-sm"><span className="text-gray-300">Social: {titleSuggestions.socialHeadline}</span><button type="button" onClick={() => setTitle(titleSuggestions.socialHeadline)} className="text-xs bg-brand-primary text-base-100 font-semibold px-2 py-1 rounded-md hover:bg-brand-secondary">Użyj</button></div>
+                            {titleSuggestions.youtubeTitles.map((ytTitle, i) => (<div key={i} className="flex items-center justify-between text-sm"><span className="text-gray-300">YT: {ytTitle}</span><button type="button" onClick={() => handleSelectTitle(ytTitle)} className="text-xs bg-brand-primary text-base-100 font-semibold px-2 py-1 rounded-md hover:bg-brand-secondary">Użyj</button></div>))}
+                            <div className="flex items-center justify-between text-sm"><span className="text-gray-300">Social: {titleSuggestions.socialHeadline}</span><button type="button" onClick={() => handleSelectTitle(titleSuggestions.socialHeadline)} className="text-xs bg-brand-primary text-base-100 font-semibold px-2 py-1 rounded-md hover:bg-brand-secondary">Użyj</button></div>
                         </div>
                     )}
                     
-                    <div><label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">Tytuł Roboczy</label><input type="text" id="title" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none" placeholder="np. Gotowanie spaghetti carbonara" required /></div>
+                    <div><label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">Tytuł Roboczy</label><input type="text" id="title" value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none" placeholder="np. Gotowanie spaghetti carbonara" required /></div>
                     <div><label htmlFor="categories" className="block text-sm font-medium text-gray-300 mb-2">Kategorie / Nisza</label><input type="text" id="categories" value={categories} onChange={(e) => setCategories(e.target.value)} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none" placeholder="np. Kuchnia Włoska, Vlogi Kulinarne" required /></div>
                     <div><label htmlFor="tone" className="block text-sm font-medium text-gray-300 mb-2">Preferowany Ton</label><select id="tone" value={tone} onChange={(e) => setTone(e.target.value)} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none"><option>profesjonalny</option> <option>zabawny</option> <option>edukacyjny</option> <option>inspirujący</option> <option>luźny</option></select></div>
                 </div>
             </fieldset>
 
-             <fieldset>
-                <legend className="text-xl font-bold text-white mb-4">2. Połączone Konta</legend>
-                <div className="p-4 bg-base-300 rounded-lg">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {socialPlatforms.map(({ id, name, icon }) => (
-                        <div key={id} className="text-center">
-                            <div className="text-gray-300 mb-2">{icon}</div>
-                            <button 
-                                type="button"
-                                onClick={() => handleConnectAccount(id)}
-                                className={`w-full text-sm font-semibold py-2 rounded-lg transition-colors ${
-                                    connectedAccounts[id] 
-                                    ? 'bg-green-500/20 text-green-400' 
-                                    : 'bg-base-100 hover:bg-base-200 text-gray-300'
-                                }`}
-                            >
-                                {connectedAccounts[id] ? 'Połączono' : 'Połącz'}
-                            </button>
-                        </div>
-                    ))}
-                  </div>
-                </div>
-            </fieldset>
-
             <fieldset>
-                <legend className="text-xl font-bold text-white mb-4">3. Branding i Ulepszenia</legend>
+                <legend className="text-xl font-bold text-white mb-4">2. Branding i Publikacja</legend>
                  <div className="grid md:grid-cols-2 gap-6">
                      <div className="space-y-4 p-4 bg-base-300 rounded-lg">
-                         <h4 className="font-semibold text-gray-200 flex items-center gap-2"><BrandingIcon className="w-5 h-5 text-brand-primary"/> Branding Firmy</h4>
+                         <h4 className="font-semibold text-gray-200 flex items-center gap-2"><BrandingIcon className="w-5 h-5 text-brand-primary"/> Branding</h4>
                          <div>
                              <label htmlFor="logo-upload" className="block text-sm font-medium text-gray-300 mb-2">Logo (PNG)</label>
                              <div className="flex items-center gap-4">
@@ -402,7 +430,7 @@ const VideoAssistant: React.FC = () => {
                          </div>
                      </div>
                      <div className="space-y-4 p-4 bg-base-300 rounded-lg">
-                          <h4 className="font-semibold text-gray-200 flex items-center gap-2"><MusicIcon className="w-5 h-5 text-brand-primary"/> Muzyka i Napisy</h4>
+                          <h4 className="font-semibold text-gray-200 flex items-center gap-2"><MusicIcon className="w-5 h-5 text-brand-primary"/> Muzyka i Platformy</h4>
                             <div>
                                <label className="block text-sm font-medium text-gray-300 mb-2">Muzyka w Tle</label>
                                {selectedMusic ? (
@@ -417,17 +445,29 @@ const VideoAssistant: React.FC = () => {
                                  {selectedMusic ? 'Zmień utwór...' : 'Wyszukaj lub dodaj utwór...'}
                                </button>
                             </div>
-                          <div className="flex items-center pt-2">
-                               <input type="checkbox" id="subtitles" checked={hasSubtitles} onChange={(e) => setHasSubtitles(e.target.checked)} className="h-4 w-4 rounded border-gray-500 bg-base-100 text-brand-primary focus:ring-brand-primary" />
-                               <label htmlFor="subtitles" className="ml-3 block text-sm font-medium text-gray-300">Dodaj automatyczne napisy</label>
-                          </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Publikuj na</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {(['YouTube', 'TikTok', 'Instagram', 'Facebook'] as SocialPlatform[]).map(platform => (
+                                        <button 
+                                            key={platform}
+                                            type="button"
+                                            onClick={() => handlePlatformToggle(platform)}
+                                            className={`px-3 py-1.5 text-sm font-semibold rounded-full flex items-center gap-2 transition-colors ${publishingPlatforms.has(platform) ? 'bg-brand-primary text-base-100' : 'bg-base-100 text-gray-300 hover:bg-base-300'}`}
+                                        >
+                                            {getPlatformIcon(platform)}
+                                            {platform}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                      </div>
                  </div>
             </fieldset>
 
             {videoFile && (
                 <fieldset>
-                    <legend className="text-xl font-bold text-white mb-4">4. Generator Miniatur AI</legend>
+                    <legend className="text-xl font-bold text-white mb-4">3. Generator Miniatur AI</legend>
                     <div className="p-4 bg-base-300 rounded-lg space-y-4">
                         <div className="grid md:grid-cols-2 gap-6 items-center">
                             <div>
@@ -461,7 +501,7 @@ const VideoAssistant: React.FC = () => {
             <div className="pt-2">
                 <button type="submit" disabled={isLoading} className="w-full flex justify-center items-center gap-2 bg-brand-primary text-base-100 font-bold py-3 px-4 rounded-lg hover:bg-brand-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                     {isLoading ? <LoadingSpinner /> : <LightBulbIcon className="w-5 h-5" />}
-                    {isLoading ? 'Generowanie...' : 'Generuj Główny Plan Publikacji'}
+                    {isLoading ? 'Generowanie...' : 'Generuj Plan i Przejdź do Publikacji'}
                 </button>
             </div>
         </form>
@@ -494,24 +534,74 @@ const VideoAssistant: React.FC = () => {
       )}
 
       {results && (
-        <div className="space-y-8 animate-fade-in mt-8">
-            <section>
-                <h3 className="text-2xl font-bold mb-4 text-white">Harmonogram Publikacji</h3>
-                <div className="overflow-x-auto bg-base-200 rounded-lg shadow">
-                    <table className="w-full text-left">
-                        <thead className="bg-base-300"><tr><th className="p-4 font-semibold">Platforma</th><th className="p-4 font-semibold">Sugerowany Czas</th></tr></thead>
-                        <tbody>{results.schedule.map((item, index) => (<tr key={index} className="border-t border-gray-700"><td className="p-4 font-medium">{item.platform}</td><td className="p-4">{new Date(item.time).toLocaleString('pl-PL')}</td></tr>))}</tbody>
-                    </table>
-                </div>
-            </section>
-            <section>
-                 <h3 className="text-2xl font-bold mb-4 text-white">Wygenerowane Opisy</h3>
-                 <div className="space-y-4">{results.descriptions.map((item, index) => (<div key={index} className="bg-base-200 p-4 rounded-lg shadow"><h4 className="font-bold text-lg text-brand-primary mb-2">{item.platform}</h4><p className="whitespace-pre-wrap text-base-content">{item.text}</p></div>))}</div>
-            </section>
-            <section>
-                <h3 className="text-2xl font-bold mb-4 text-white">Zestawy Hasztagów</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{results.hashtags.map((item, index) => (<div key={index} className="bg-base-200 p-4 rounded-lg shadow"><h4 className="font-bold text-lg text-brand-primary mb-3">{item.platform}</h4><div className="space-y-3"><div><h5 className="font-semibold text-sm mb-1 text-gray-400">Duże (Trendowe)</h5><div className="flex flex-wrap gap-2">{item.sets.large.map(tag => <span key={tag} className="bg-brand-primary/20 text-brand-light text-xs font-medium px-2.5 py-1 rounded-full">{tag}</span>)}</div></div><div><h5 className="font-semibold text-sm mb-1 text-gray-400">Średnie (Niszowe)</h5><div className="flex flex-wrap gap-2">{item.sets.medium.map(tag => <span key={tag} className="bg-brand-primary/30 text-brand-light text-xs font-medium px-2.5 py-1 rounded-full">{tag}</span>)}</div></div><div><h5 className="font-semibold text-sm mb-1 text-gray-400">Małe (Specyficzne)</h5><div className="flex flex-wrap gap-2">{item.sets.small.map(tag => <span key={tag} className="bg-base-300 text-brand-light text-xs font-medium px-2.5 py-1 rounded-full">{tag}</span>)}</div></div></div></div>))}</div>
-            </section>
+        <div className="space-y-8 animate-fade-in mt-8 bg-base-200 p-6 rounded-2xl shadow-lg">
+            <h3 className="text-2xl font-bold text-center text-white">Centrum Publikacji</h3>
+            <div className="flex justify-center border-b border-gray-700">
+                {[...publishingPlatforms].map(platform => (
+                    <button 
+                        key={platform}
+                        onClick={() => setActivePublishTab(platform)}
+                        className={`px-4 py-2 text-sm font-semibold flex items-center gap-2 ${activePublishTab === platform ? 'border-b-2 border-brand-primary text-brand-primary' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        {getPlatformIcon(platform)} {platform}
+                    </button>
+                ))}
+            </div>
+
+            { [...publishingPlatforms].map(platform => {
+                const descItem = results.descriptions.find(d => d.platform.toLowerCase().includes(platform.toLowerCase()));
+                const hashtagItem = results.hashtags.find(h => h.platform.toLowerCase().includes(platform.toLowerCase()));
+                const allHashtags = hashtagItem ? [...hashtagItem.sets.large, ...hashtagItem.sets.medium, ...hashtagItem.sets.small] : [];
+
+                let displayTitle = title;
+                let displayTags = categoryAndTags?.youtubeTags.join(', ') || '';
+                if (platform !== 'YouTube') {
+                    displayTitle = titleSuggestions?.socialHeadline || title;
+                    displayTags = allHashtags.map(h => `#${h.replace(/#/g, '')}`).join(' ');
+                }
+
+                return (
+                    <div key={platform} className={`${activePublishTab === platform ? 'block' : 'hidden'} space-y-4 animate-fade-in`}>
+                        <a href={PlatformPublishingLinks[platform]} target="_blank" rel="noopener noreferrer" className="w-full inline-flex justify-center items-center gap-2 bg-brand-primary text-base-100 font-bold py-3 px-4 rounded-lg hover:bg-brand-secondary transition-all">
+                           <ExternalLinkIcon className="w-5 h-5"/> Otwórz stronę przesyłania {platform}
+                        </a>
+                        
+                        <div className="space-y-1">
+                            <label className="text-sm font-semibold text-gray-300">Tytuł</label>
+                            <div className="flex gap-2">
+                                <textarea readOnly value={displayTitle} rows={1} className="w-full bg-base-100 text-gray-300 text-sm p-2 border border-gray-600 rounded-md resize-none"></textarea>
+                                <button onClick={() => handleCopyToClipboard(displayTitle, `${platform}-title`)} className={`w-28 text-sm font-semibold px-4 py-2 rounded-md transition-colors ${copiedElement === `${platform}-title` ? 'bg-green-600 text-white' : 'bg-base-300 hover:bg-brand-primary hover:text-base-100'}`}>{copiedElement === `${platform}-title` ? 'Skopiowano!' : 'Kopiuj'}</button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-sm font-semibold text-gray-300">Opis</label>
+                            <div className="flex gap-2">
+                                <textarea readOnly value={descItem?.text || ''} rows={5} className="w-full bg-base-100 text-gray-300 text-sm p-2 border border-gray-600 rounded-md resize-none"></textarea>
+                                <button onClick={() => handleCopyToClipboard(descItem?.text || '', `${platform}-desc`)} className={`w-28 text-sm font-semibold px-4 py-2 rounded-md transition-colors ${copiedElement === `${platform}-desc` ? 'bg-green-600 text-white' : 'bg-base-300 hover:bg-brand-primary hover:text-base-100'}`}>{copiedElement === `${platform}-desc` ? 'Skopiowano!' : 'Kopiuj'}</button>
+                            </div>
+                        </div>
+
+                         <div className="space-y-1">
+                            <label className="text-sm font-semibold text-gray-300">{platform === 'YouTube' ? 'Tagi' : 'Hasztagi'}</label>
+                            <div className="flex gap-2">
+                                <textarea readOnly value={displayTags} rows={3} className="w-full bg-base-100 text-gray-300 text-sm p-2 border border-gray-600 rounded-md resize-none"></textarea>
+                                <button onClick={() => handleCopyToClipboard(displayTags, `${platform}-tags`)} className={`w-28 text-sm font-semibold px-4 py-2 rounded-md transition-colors ${copiedElement === `${platform}-tags` ? 'bg-green-600 text-white' : 'bg-base-300 hover:bg-brand-primary hover:text-base-100'}`}>{copiedElement === `${platform}-tags` ? 'Skopiowano!' : 'Kopiuj'}</button>
+                            </div>
+                        </div>
+
+                        <div className="pt-2 text-gray-400 text-sm">
+                            <h4 className="font-semibold mb-2 text-gray-300">Checklista Publikacji:</h4>
+                            <ul className="space-y-1 list-inside">
+                                <li><input type="checkbox" className="accent-brand-primary mr-2"/>Przesłano plik wideo na {platform}.</li>
+                                <li><input type="checkbox" className="accent-brand-primary mr-2"/>Wklejono tytuł.</li>
+                                <li><input type="checkbox" className="accent-brand-primary mr-2"/>Wklejono opis.</li>
+                                <li><input type="checkbox" className="accent-brand-primary mr-2"/>Wklejono {platform === 'YouTube' ? 'tagi' : 'hasztagi'}.</li>
+                            </ul>
+                        </div>
+                    </div>
+                )
+             })}
         </div>
       )}
     </div>

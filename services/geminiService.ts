@@ -1,6 +1,29 @@
 import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
 import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack } from '../types';
 
+// Helper to translate technical errors into user-friendly messages.
+const parseGeminiError = (error: unknown): string => {
+    if (error instanceof Error) {
+        const message = error.message;
+        if (message.includes('API key not valid')) {
+            return "Klucz API jest nieprawidłowy. Sprawdź, czy został poprawnie skonfigurowany w ustawieniach wdrożenia.";
+        }
+        if (message.includes('429')) {
+            return "Osiągnięto limit zapytań do API (quota). Spróbuj ponownie za chwilę.";
+        }
+        if (message.includes('500') || message.includes('503')) {
+            return "Usługa Gemini jest tymczasowo niedostępna. Spróbuj ponownie później.";
+        }
+        const coreMessageMatch = message.match(/\[GoogleGenerativeAI Error\]:\s*(.*)/);
+        if (coreMessageMatch && coreMessageMatch[1]) {
+            return `Błąd API Gemini: ${coreMessageMatch[1]}`;
+        }
+        return message;
+    }
+    return 'Wystąpił nieznany błąd. Sprawdź konsolę po więcej informacji.';
+};
+
+
 const getAiInstance = () => {
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
@@ -59,8 +82,7 @@ export const searchRoyaltyFreeMusic = async (query: string, videoDescription: st
         return JSON.parse(jsonText) as MusicTrack[];
     } catch (error) {
         console.error("Error searching for music:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Nie udało się wyszukać muzyki. Spróbuj ponownie.");
+        throw new Error(parseGeminiError(error));
     }
 };
 
@@ -121,8 +143,7 @@ export const generateCategoryAndTags = async (filename: string): Promise<Categor
         return JSON.parse(jsonText) as CategoryAndTags;
     } catch (error) {
         console.error("Error generating categories and tags:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Nie udało się wygenerować kategorii i tagów. Spróbuj ponownie.");
+        throw new Error(parseGeminiError(error));
     }
 };
 
@@ -167,8 +188,7 @@ export const generateTitlesFromFilename = async (filename: string, primaryKeywor
         return JSON.parse(jsonText) as TitleSuggestions;
     } catch (error) {
         console.error("Error generating titles:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Nie udało się wygenerować tytułów. Spróbuj ponownie.");
+        throw new Error(parseGeminiError(error));
     }
 };
 
@@ -177,8 +197,7 @@ export const generatePublicationPlan = async (
     title: string,
     categories: string,
     tone: string,
-    selectedMusic: MusicTrack | null,
-    hasSubtitles: boolean
+    selectedMusic: MusicTrack | null
 ): Promise<PublicationPlan> => {
     
     let enhancements = [];
@@ -188,9 +207,6 @@ export const generatePublicationPlan = async (
         } else {
             enhancements.push(`Wideo zawiera muzykę w tle: "${selectedMusic.name}" autorstwa ${selectedMusic.artist}. Ważne: Głośność muzyki powinna być ustawiona na 5-10%, aby nie zagłuszać mowy.`);
         }
-    }
-    if (hasSubtitles) {
-        enhancements.push('Wideo zawiera dynamiczne, wgrane na stałe napisy (hard-coded captions) dla lepszej dostępności.');
     }
     const enhancementsText = enhancements.length > 0 ? `\nDodatkowe informacje o wideo: ${enhancements.join(' ')}` : '';
 
@@ -206,7 +222,7 @@ export const generatePublicationPlan = async (
 
         Twoje zadania:
         1.  **Analiza i Optymalizacja Metadanych:**
-            - Wygeneruj unikalne, zoptymalizowane pod SEO opisy dla każdej platformy (YT: do 5000 znaków, IG: do 2200, TT: do 250, FB: elastycznie). Jeśli to stosowne, wspomnij o muzyce lub napisach.
+            - Wygeneruj unikalne, zoptymalizowane pod SEO opisy dla każdej platformy (YT: do 5000 znaków, IG: do 2200, TT: do 250, FB: elastycznie). Jeśli to stosowne, wspomnij o muzyce.
             - Stwórz 3 zestawy hasztagów (duże, średnie, małe) dla każdej platformy, maksymalizując ich potencjał.
         2.  **Harmonogramowanie Publikacji:**
             - Zaplanuj optymalny czas publikacji (data i godzina) dla każdej platformy, symulując analizę trendów i aktywności użytkowników w podanych kategoriach. Sugeruj daty w ciągu najbliższego tygodnia.
@@ -271,8 +287,7 @@ export const generatePublicationPlan = async (
 
     } catch (error) {
         console.error("Error generating publication plan:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Nie udało się wygenerować planu publikacji. Spróbuj ponownie.");
+        throw new Error(parseGeminiError(error));
     }
 };
 
@@ -321,6 +336,8 @@ export const generateThumbnails = async (
             imageParts.push(logoPart);
         }
 
+        const blockReasons = new Set<string>();
+
         const generationPromises = stylePrompts.map(async (stylePrompt, index) => {
             const fullPrompt = `${basePrompt}\n${stylePrompt}`;
 
@@ -336,6 +353,7 @@ export const generateThumbnails = async (
 
             if (!responseParts) {
                 if (response.promptFeedback?.blockReason) {
+                    blockReasons.add(response.promptFeedback.blockReason);
                     console.error(`Generowanie wariantu ${index + 1} zablokowane: ${response.promptFeedback.blockReason}`);
                 }
                 console.warn(`Model nie wygenerował obrazu dla wariantu ${index + 1}.`);
@@ -363,15 +381,17 @@ export const generateThumbnails = async (
         const suggestions = results.filter((r): r is ThumbnailSuggestion => r !== null);
 
         if (suggestions.length === 0) {
-            throw new Error("Model nie wygenerował żadnych obrazów. Sprawdź, czy treść nie narusza zasad bezpieczeństwa.");
+            if (blockReasons.size > 0) {
+                 throw new Error(`Model zablokował wygenerowanie obrazów z powodu: ${[...blockReasons].join(', ')}. Spróbuj zmienić tekst lub wybraną klatkę wideo.`);
+            }
+            throw new Error("Model nie wygenerował żadnych obrazów. Sprawdź, czy treść nie narusza zasad bezpieczeństwa lub spróbuj ponownie.");
         }
         
         return suggestions;
 
     } catch (error) {
         console.error("Error generating thumbnails:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Nie udało się wygenerować miniatur. Spróbuj ponownie.");
+        throw new Error(parseGeminiError(error));
     }
 };
 
@@ -390,8 +410,7 @@ export const analyzeImage = async (prompt: string, imageFile: File): Promise<str
         return response.text;
     } catch (error) {
         console.error("Error analyzing image:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Nie udało się przeanalizować obrazu. Spróbuj ponownie.");
+        throw new Error(parseGeminiError(error));
     }
 };
 

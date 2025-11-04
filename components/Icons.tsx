@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export const VideoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -114,5 +113,11 @@ export const InstagramIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
 export const FacebookIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
         <path d="M22,12c0-5.52-4.48-10-10-10S2,6.48,2,12c0,4.99,3.66,9.13,8.44,9.88V15.5H8.31v-3.5h2.13v-2.65 c0-2.1,1.26-3.26,3.17-3.26c0.9,0,1.8,0.16,1.8,0.16v2.98h-1.5c-1.04,0-1.38,0.62-1.38,1.34v1.58h3.33l-0.52,3.5h-2.81 v6.38C18.34,21.13,22,16.99,22,12z" />
+    </svg>
+);
+
+export const ExternalLinkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
     </svg>
 );
