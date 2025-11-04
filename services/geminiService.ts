@@ -1,12 +1,14 @@
-
 import { GoogleGenAI, Type, Chat, Modality } from "@google/genai";
 import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
+const getAiInstance = () => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+        throw new Error("Brak klucza API. Upewnij się, że zmienna środowiskowa API_KEY jest poprawnie skonfigurowana w ustawieniach wdrożenia.");
+    }
+    return new GoogleGenAI({ apiKey });
+};
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 let chatInstance: Chat | null = null;
 
 const fileToGenerativePart = async (file: File) => {
@@ -21,8 +23,6 @@ const fileToGenerativePart = async (file: File) => {
 };
 
 export const searchRoyaltyFreeMusic = async (query: string, videoDescription: string): Promise<MusicTrack[]> => {
-    // FIX: Escaped backticks inside the template literal to prevent syntax errors.
-    // The unescaped backticks were causing the template string to terminate prematurely, leading to parsing errors.
     const prompt = `
         Jesteś kuratorem w obszernej bibliotece muzyki bez tantiem (royalty-free). Twoim zadaniem jest znalezienie 5 idealnie pasujących utworów muzycznych na podstawie zapytania użytkownika i opisu wideo.
 
@@ -38,6 +38,7 @@ export const searchRoyaltyFreeMusic = async (query: string, videoDescription: st
     `;
 
     try {
+        const ai = getAiInstance();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -60,6 +61,7 @@ export const searchRoyaltyFreeMusic = async (query: string, videoDescription: st
         return JSON.parse(jsonText) as MusicTrack[];
     } catch (error) {
         console.error("Error searching for music:", error);
+        if (error instanceof Error) throw error;
         throw new Error("Nie udało się wyszukać muzyki. Spróbuj ponownie.");
     }
 };
@@ -82,6 +84,7 @@ export const generateCategoryAndTags = async (filename: string): Promise<Categor
         Zwróć wynik w formacie JSON.
     `;
     try {
+        const ai = getAiInstance();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -120,6 +123,7 @@ export const generateCategoryAndTags = async (filename: string): Promise<Categor
         return JSON.parse(jsonText) as CategoryAndTags;
     } catch (error) {
         console.error("Error generating categories and tags:", error);
+        if (error instanceof Error) throw error;
         throw new Error("Nie udało się wygenerować kategorii i tagów. Spróbuj ponownie.");
     }
 };
@@ -139,6 +143,7 @@ export const generateTitlesFromFilename = async (filename: string, primaryKeywor
         Zwróć wynik w formacie JSON.
     `;
     try {
+        const ai = getAiInstance();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -164,6 +169,7 @@ export const generateTitlesFromFilename = async (filename: string, primaryKeywor
         return JSON.parse(jsonText) as TitleSuggestions;
     } catch (error) {
         console.error("Error generating titles:", error);
+        if (error instanceof Error) throw error;
         throw new Error("Nie udało się wygenerować tytułów. Spróbuj ponownie.");
     }
 };
@@ -211,6 +217,7 @@ export const generatePublicationPlan = async (
     `;
 
     try {
+        const ai = getAiInstance();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -266,6 +273,7 @@ export const generatePublicationPlan = async (
 
     } catch (error) {
         console.error("Error generating publication plan:", error);
+        if (error instanceof Error) throw error;
         throw new Error("Nie udało się wygenerować planu publikacji. Spróbuj ponownie.");
     }
 };
@@ -306,6 +314,7 @@ export const generateThumbnails = async (
 
 
     try {
+        const ai = getAiInstance();
         const framePart = await fileToGenerativePart(videoFrame);
         const imageParts: (typeof framePart)[] = [framePart];
 
@@ -342,7 +351,6 @@ export const generateThumbnails = async (
                 if (part.inlineData) {
                     imageData = part.inlineData.data;
                 } else if (part.text) {
-                    // Use the text part as the description
                     description = part.text;
                 }
             }
@@ -364,9 +372,7 @@ export const generateThumbnails = async (
 
     } catch (error) {
         console.error("Error generating thumbnails:", error);
-        if (error instanceof Error) {
-            throw error;
-        }
+        if (error instanceof Error) throw error;
         throw new Error("Nie udało się wygenerować miniatur. Spróbuj ponownie.");
     }
 };
@@ -374,10 +380,11 @@ export const generateThumbnails = async (
 
 export const getChatInstance = () => {
     if (!chatInstance) {
+        const ai = getAiInstance();
         chatInstance = ai.chats.create({
             model: 'gemini-2.5-flash',
             config: {
-                systemInstruction: 'Jesteś pomocnym asystentem. Odpowiadaj na pytania krótko i zwięźle.',
+                systemInstruction: 'Jesteś pomocnym asystentem. Odpowiadaj na pytania krótko i zwięzle.',
             },
         });
     }
@@ -386,6 +393,7 @@ export const getChatInstance = () => {
 
 export const analyzeImage = async (prompt: string, image: File): Promise<string> => {
     try {
+        const ai = getAiInstance();
         const imagePart = await fileToGenerativePart(image);
         const textPart = { text: prompt };
         const response = await ai.models.generateContent({
@@ -395,6 +403,7 @@ export const analyzeImage = async (prompt: string, image: File): Promise<string>
         return response.text;
     } catch (error) {
         console.error("Error analyzing image:", error);
+        if (error instanceof Error) throw error;
         throw new Error("Nie udało się przeanalizować obrazu. Spróbuj ponownie.");
     }
 };

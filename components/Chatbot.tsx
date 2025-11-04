@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage } from '../types';
 import { getChatInstance } from '../services/geminiService';
@@ -14,10 +13,6 @@ const Chatbot: React.FC = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     
     useEffect(() => {
-        chatInstanceRef.current = getChatInstance();
-    }, []);
-
-    useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
@@ -30,14 +25,16 @@ const Chatbot: React.FC = () => {
         setIsLoading(true);
 
         try {
-            if (chatInstanceRef.current) {
-                const response = await chatInstanceRef.current.sendMessage({ message: input });
-                const modelMessage: ChatMessage = { role: 'model', parts: [{ text: response.text }] };
-                setMessages(prev => [...prev, modelMessage]);
+            if (!chatInstanceRef.current) {
+                chatInstanceRef.current = getChatInstance();
             }
+            const response = await chatInstanceRef.current.sendMessage({ message: input });
+            const modelMessage: ChatMessage = { role: 'model', parts: [{ text: response.text }] };
+            setMessages(prev => [...prev, modelMessage]);
         } catch (error) {
             console.error(error);
-            const errorMessage: ChatMessage = { role: 'model', parts: [{ text: "Przepraszam, wystąpił błąd. Spróbuj ponownie." }] };
+            const errorMessageText = error instanceof Error ? error.message : "Przepraszam, wystąpił błąd. Spróbuj ponownie.";
+            const errorMessage: ChatMessage = { role: 'model', parts: [{ text: errorMessageText }] };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);
