@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, Chat, Modality } from "@google/genai";
+import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
 import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack } from '../types';
 
 const getAiInstance = () => {
@@ -8,8 +8,6 @@ const getAiInstance = () => {
     }
     return new GoogleGenAI({ apiKey });
 };
-
-let chatInstance: Chat | null = null;
 
 const fileToGenerativePart = async (file: File) => {
   const base64EncodedDataPromise = new Promise<string>((resolve) => {
@@ -377,33 +375,30 @@ export const generateThumbnails = async (
     }
 };
 
-
-export const getChatInstance = () => {
-    if (!chatInstance) {
-        const ai = getAiInstance();
-        chatInstance = ai.chats.create({
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction: 'Jesteś pomocnym asystentem. Odpowiadaj na pytania krótko i zwięzle.',
-            },
-        });
-    }
-    return chatInstance;
-};
-
-export const analyzeImage = async (prompt: string, image: File): Promise<string> => {
+// FIX: Add analyzeImage function
+export const analyzeImage = async (prompt: string, imageFile: File): Promise<string> => {
     try {
         const ai = getAiInstance();
-        const imagePart = await fileToGenerativePart(image);
+        const imagePart = await fileToGenerativePart(imageFile);
         const textPart = { text: prompt };
+
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [imagePart, textPart] }
+            contents: { parts: [imagePart, textPart] },
         });
+
         return response.text;
     } catch (error) {
         console.error("Error analyzing image:", error);
         if (error instanceof Error) throw error;
         throw new Error("Nie udało się przeanalizować obrazu. Spróbuj ponownie.");
     }
+};
+
+// FIX: Add getChatInstance function
+export const getChatInstance = (): Chat => {
+    const ai = getAiInstance();
+    return ai.chats.create({
+        model: 'gemini-2.5-flash',
+    });
 };

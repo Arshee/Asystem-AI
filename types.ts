@@ -26,11 +26,6 @@ export interface PublicationPlan {
   hashtags: HashtagItem[];
 }
 
-export interface ChatMessage {
-    role: 'user' | 'model';
-    parts: { text: string }[];
-}
-
 export interface TitleSuggestions {
   youtubeTitles: string[];
   socialHeadline: string;
@@ -53,4 +48,10 @@ export interface MusicTrack {
   name: string;
   artist: string;
   mood: string;
+}
+
+// FIX: Add ChatMessage interface
+export interface ChatMessage {
+  role: 'user' | 'model';
+  parts: [{ text: string }];
 }
