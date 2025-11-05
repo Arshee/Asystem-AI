@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: asystent-ai-backend
+    env: node
+    plan: starter
+    buildCommand: "npm ci"
+    startCommand: "npm start"
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: APP_URL
+        fromService:
+          name: asystent-ai-backend
+  - type: worker
+    name: asystent-ai-worker
+    env: node
+    plan: starter
+    buildCommand: "npm ci"
+    startCommand: "npm run worker"
