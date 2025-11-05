@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage } from '../types';
-import { getChatInstance } from '../services/geminiService';
+import { generateAiResponse } from '../services/openaiService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { SendIcon, UserIcon, SparklesIcon } from './Icons';
-// FIX: Correct import for Chat type
-import { Chat } from '@google/genai';
 
 const Chatbot: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -17,11 +15,10 @@ const Chatbot: React.FC = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const handleSend = async () => {
-        if (!input.trim() || isLoading) return;
-        
-        const userMessage: ChatMessage = { role: 'user', parts: [{ text: input }] };
-        setMessages(prev => [...prev, userMessage]);
+    const responseText = await generateAiResponse(input);
+    const modelMessage: ChatMessage = { role: 'model', parts: [{ text: responseText }] };
+    setMessages(prev => [...prev, modelMessage]);
+
         setInput('');
         setIsLoading(true);
 
