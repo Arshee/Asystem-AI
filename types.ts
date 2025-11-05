@@ -1,3 +1,8 @@
+// FIX: Add missing ChatMessage interface
+export interface ChatMessage {
+  role: 'user' | 'model';
+  parts: { text: string }[];
+}
 
 export interface ScheduleItem {
   platform: string;
@@ -50,8 +55,10 @@ export interface MusicTrack {
   mood: string;
 }
 
-// FIX: Add ChatMessage interface
-export interface ChatMessage {
-  role: 'user' | 'model';
-  parts: [{ text: string }];
+export interface PerformanceAnalysis {
+  summary: string;
+  score: string;
+  positives: string[];
+  improvements: string[];
+  suggestions: string[];
 }

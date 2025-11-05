@@ -44,6 +44,8 @@ const VideoAssistant: React.FC = () => {
   // Thumbnail Generation UI State
   const [thumbnailTimestamp, setThumbnailTimestamp] = useState(1);
   const [thumbnailOverlayText, setThumbnailOverlayText] = useState('');
+  const [thumbnailTextEffect, setThumbnailTextEffect] = useState('none');
+  const [thumbnailImageFilter, setThumbnailImageFilter] = useState('none');
   
   // Loading and Error State
   const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
@@ -60,6 +62,9 @@ const VideoAssistant: React.FC = () => {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Derived state for form validation
+  const isFormInvalid = !videoFile || !title.trim() || !categories.trim() || isLoading;
 
   // Debounce effect for the title input
   useEffect(() => {
@@ -110,6 +115,7 @@ const VideoAssistant: React.FC = () => {
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setError(null);
       setVideoFile(file);
       if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
       setVideoPreviewUrl(URL.createObjectURL(file));
@@ -198,8 +204,12 @@ const VideoAssistant: React.FC = () => {
   };
   
   const handleGenerateThumbnails = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || !title ) {
-        setError("Wideo i tytuł są wymagane do wygenerowania miniatur.");
+    if (!videoRef.current || !canvasRef.current) {
+        setError("Błąd inicjalizacji podglądu wideo. Spróbuj odświeżyć plik.");
+        return;
+    }
+    if (!title.trim()) {
+        setError("Tytuł wideo jest wymagany do wygenerowania miniatur.");
         return;
     }
     
@@ -228,7 +238,16 @@ const VideoAssistant: React.FC = () => {
 
         if (!frameFile) throw new Error("Nie udało się przechwycić klatki wideo.");
         
-        const thumbs = await generateThumbnails(frameFile, title, thumbnailOverlayText, logoFile || undefined, logoPosition, videoOrientation);
+        const thumbs = await generateThumbnails(
+            frameFile, 
+            title, 
+            thumbnailOverlayText, 
+            logoFile || undefined, 
+            logoPosition, 
+            videoOrientation,
+            thumbnailTextEffect,
+            thumbnailImageFilter
+        );
         setThumbnailSuggestions(thumbs);
         
     } catch (err) {
@@ -237,14 +256,27 @@ const VideoAssistant: React.FC = () => {
         setIsGeneratingThumbnails(false);
     }
 
-  }, [title, thumbnailTimestamp, thumbnailOverlayText, logoFile, logoPosition, videoOrientation]);
+  }, [title, thumbnailTimestamp, thumbnailOverlayText, logoFile, logoPosition, videoOrientation, thumbnailTextEffect, thumbnailImageFilter]);
 
   const handleFormSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const validationErrors = [];
     if (!videoFile) {
-        alert("Proszę wybrać plik wideo.");
-        return;
+      validationErrors.push("Proszę wybrać plik wideo.");
     }
+    if (!title.trim()) {
+      validationErrors.push("Tytuł roboczy jest wymagany.");
+    }
+    if (!categories.trim()) {
+      validationErrors.push("Kategorie / Nisza są wymagane.");
+    }
+
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join(' '));
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setResults(null);
@@ -351,7 +383,7 @@ const VideoAssistant: React.FC = () => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto animate-fade-in">
         <canvas ref={canvasRef} className="hidden"></canvas>
         {isMusicModalOpen && <MusicSearchModal/>}
         {zoomedImage && <ImageZoomModal/>}
@@ -361,7 +393,7 @@ const VideoAssistant: React.FC = () => {
         <p className="mt-4 text-lg text-gray-400">Zautomatyzuj i zoptymalymalizuj swoje publikacje w mediach społecznościowych.</p>
       </div>
 
-      <div className="bg-base-200 p-6 rounded-2xl shadow-lg animate-fade-in">
+      <div className="bg-base-200 p-6 rounded-2xl shadow-lg">
         <form onSubmit={handleFormSubmit} className="space-y-8">
             <fieldset>
                 <legend className="text-xl font-bold text-white mb-4">1. Treść Podstawowa</legend>
@@ -401,8 +433,8 @@ const VideoAssistant: React.FC = () => {
                         </div>
                     )}
                     
-                    <div><label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">Tytuł Roboczy</label><input type="text" id="title" value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none" placeholder="np. Gotowanie spaghetti carbonara" required /></div>
-                    <div><label htmlFor="categories" className="block text-sm font-medium text-gray-300 mb-2">Kategorie / Nisza</label><input type="text" id="categories" value={categories} onChange={(e) => setCategories(e.target.value)} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none" placeholder="np. Kuchnia Włoska, Vlogi Kulinarne" required /></div>
+                    <div><label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">Tytuł Roboczy</label><input type="text" id="title" value={titleInput} onChange={(e) => { setTitleInput(e.target.value); if(error) setError(null); }} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none" placeholder="np. Gotowanie spaghetti carbonara" required /></div>
+                    <div><label htmlFor="categories" className="block text-sm font-medium text-gray-300 mb-2">Kategorie / Nisza</label><input type="text" id="categories" value={categories} onChange={(e) => { setCategories(e.target.value); if(error) setError(null); }} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none" placeholder="np. Kuchnia Włoska, Vlogi Kulinarne" required /></div>
                     <div><label htmlFor="tone" className="block text-sm font-medium text-gray-300 mb-2">Preferowany Ton</label><select id="tone" value={tone} onChange={(e) => setTone(e.target.value)} className="w-full bg-base-300 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none"><option>profesjonalny</option> <option>zabawny</option> <option>edukacyjny</option> <option>inspirujący</option> <option>luźny</option></select></div>
                 </div>
             </fieldset>
@@ -469,7 +501,7 @@ const VideoAssistant: React.FC = () => {
                 <fieldset>
                     <legend className="text-xl font-bold text-white mb-4">3. Generator Miniatur AI</legend>
                     <div className="p-4 bg-base-300 rounded-lg space-y-4">
-                        <div className="grid md:grid-cols-2 gap-6 items-center">
+                        <div className="grid md:grid-cols-2 gap-6 items-start">
                             <div>
                                 <h4 className="font-semibold text-gray-200 mb-2">Podgląd Wideo</h4>
                                 <div className={`w-full bg-black rounded-lg flex justify-center items-center ${videoOrientation === 'portrait' ? 'max-h-96' : ''}`}>
@@ -480,16 +512,36 @@ const VideoAssistant: React.FC = () => {
                                 <div>
                                     <label htmlFor="timestamp" className="block text-sm font-medium text-gray-300 mb-2">Wybierz klatkę (sekunda): {thumbnailTimestamp}</label>
                                     <input type="range" id="timestamp" min="0" max={videoRef.current?.duration || 60} value={thumbnailTimestamp} onChange={e => setThumbnailTimestamp(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-brand-primary"/>
-                                    <p className="text-xs text-gray-400 mt-1">Przesuń suwak, aby wybrać klatkę do miniatury.</p>
                                 </div>
                                 <div>
                                     <label htmlFor="overlay-text" className="block text-sm font-medium text-gray-300 mb-2">Tekst na miniaturze (opcjonalnie)</label>
                                     <input type="text" id="overlay-text" value={thumbnailOverlayText} onChange={e => setThumbnailOverlayText(e.target.value)} placeholder="AI wygeneruje, jeśli puste" className="w-full bg-base-100 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none"/>
                                 </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label htmlFor="text-effect" className="block text-sm font-medium text-gray-300 mb-2">Efekt Tekstu</label>
+                                        <select id="text-effect" value={thumbnailTextEffect} onChange={e => setThumbnailTextEffect(e.target.value)} className="w-full bg-base-100 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none">
+                                            <option value="none">Brak</option>
+                                            <option value="shadow">Cień</option>
+                                            <option value="outline">Obrys</option>
+                                            <option value="glow">Poświata</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="image-filter" className="block text-sm font-medium text-gray-300 mb-2">Filtr Kolorów</label>
+                                        <select id="image-filter" value={thumbnailImageFilter} onChange={e => setThumbnailImageFilter(e.target.value)} className="w-full bg-base-100 border border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-primary focus:outline-none">
+                                            <option value="none">Brak</option>
+                                            <option value="vibrant">Żywe Kolory</option>
+                                            <option value="grayscale">Skala Szarości</option>
+                                            <option value="vintage">Vintage</option>
+                                            <option value="high-contrast">Wysoki Kontrast</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                          <div className="pt-2">
-                            <button type="button" onClick={handleGenerateThumbnails} disabled={isGeneratingThumbnails || !title} className="w-full flex justify-center items-center gap-2 bg-base-200 border border-gray-600 text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-base-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button type="button" onClick={handleGenerateThumbnails} disabled={isGeneratingThumbnails || !title.trim()} className="w-full flex justify-center items-center gap-2 bg-base-200 border border-gray-600 text-gray-200 font-bold py-3 px-4 rounded-lg hover:bg-base-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isGeneratingThumbnails ? <LoadingSpinner /> : <VideoCameraIcon className="w-5 h-5" />}
                                 {isGeneratingThumbnails ? 'Tworzenie miniatur...' : 'Wygeneruj Miniatury (AI)'}
                             </button>
@@ -499,7 +551,7 @@ const VideoAssistant: React.FC = () => {
             )}
 
             <div className="pt-2">
-                <button type="submit" disabled={isLoading} className="w-full flex justify-center items-center gap-2 bg-brand-primary text-base-100 font-bold py-3 px-4 rounded-lg hover:bg-brand-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={isFormInvalid} className="w-full flex justify-center items-center gap-2 bg-brand-primary text-base-100 font-bold py-3 px-4 rounded-lg hover:bg-brand-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                     {isLoading ? <LoadingSpinner /> : <LightBulbIcon className="w-5 h-5" />}
                     {isLoading ? 'Generowanie...' : 'Generuj Plan i Przejdź do Publikacji'}
                 </button>
@@ -570,7 +622,7 @@ const VideoAssistant: React.FC = () => {
                             <label className="text-sm font-semibold text-gray-300">Tytuł</label>
                             <div className="flex gap-2">
                                 <textarea readOnly value={displayTitle} rows={1} className="w-full bg-base-100 text-gray-300 text-sm p-2 border border-gray-600 rounded-md resize-none"></textarea>
-                                <button onClick={() => handleCopyToClipboard(displayTitle, `${platform}-title`)} className={`w-28 text-sm font-semibold px-4 py-2 rounded-md transition-colors ${copiedElement === `${platform}-title` ? 'bg-green-600 text-white' : 'bg-base-300 hover:bg-brand-primary hover:text-base-100'}`}>{copiedElement === `${platform}-title` ? 'Skopiowano!' : 'Kopiuj'}</button>
+                                <button onClick={() => handleCopyToClipboard(displayTitle, `${platform}-title`)} className={`w-28 text-sm font-semibold px-4 py-2 rounded-md transition-colors ${copiedElement === `${platform}-title` ? 'bg-green-600 text-white' : 'bg-brand-primary hover:text-base-100'}`}>{copiedElement === `${platform}-title` ? 'Skopiowano!' : 'Kopiuj'}</button>
                             </div>
                         </div>
 

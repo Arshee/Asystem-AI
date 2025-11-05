@@ -1,5 +1,6 @@
+// FIX: Import Chat type for getChatInstance function
 import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
-import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack } from '../types';
+import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack, PerformanceAnalysis } from '../types';
 
 // Helper to translate technical errors into user-friendly messages.
 const parseGeminiError = (error: unknown): string => {
@@ -41,6 +42,91 @@ const fileToGenerativePart = async (file: File) => {
   return {
     inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
   };
+};
+
+// FIX: Add missing getChatInstance function for the chatbot component.
+export const getChatInstance = (): Chat => {
+    const ai = getAiInstance();
+    return ai.chats.create({
+        model: 'gemini-2.5-flash',
+        config: {
+            systemInstruction: 'Jesteś pomocnym asystentem AI. Odpowiadaj na pytania użytkownika zwięźle i precyz-yjnie.',
+        },
+    });
+};
+
+// FIX: Add missing analyzeImage function for the image analyzer component.
+export const analyzeImage = async (prompt: string, image: File): Promise<string> => {
+    try {
+        const ai = getAiInstance();
+        const imagePart = await fileToGenerativePart(image);
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [imagePart, { text: prompt }] },
+        });
+
+        return response.text;
+    } catch (error) {
+        console.error("Error analyzing image:", error);
+        throw new Error(parseGeminiError(error));
+    }
+};
+
+export const analyzePublicationPerformance = async (
+    platform: string,
+    title: string,
+    views: number,
+    likes: number,
+    comments: number,
+    shares: number,
+    goal: string
+): Promise<PerformanceAnalysis> => {
+    const prompt = `
+        Jesteś ekspertem od analizy mediów społecznościowych. Twoim zadaniem jest ocena wyników publikacji i dostarczenie praktycznych wskazówek.
+
+        Dane wejściowe:
+        - Platforma: ${platform}
+        - Tytuł/Opis: "${title}"
+        - Wyświetlenia/Zasięg: ${views}
+        - Polubienia: ${likes}
+        - Komentarze: ${comments}
+        - Udostępnienia: ${shares}
+        - Główny cel publikacji: ${goal}
+
+        Zadania do wykonania:
+        1.  **Analiza wskaźników:** Oblicz i zinterpretuj kluczowe wskaźniki (np. wskaźnik zaangażowania). Porównaj je z typowymi wynikami dla platformy ${platform}, biorąc pod uwagę cel (${goal}).
+        2.  **Identyfikacja mocnych stron:** Wskaż, co zadziałało dobrze.
+        3.  **Identyfikacja obszarów do poprawy:** Wskaż, co można było zrobić lepiej.
+        4.  **Generowanie sugestii:** Podaj 3-5 konkretnych, praktycznych porad, które pomogą autorowi osiągnąć lepsze wyniki w przyszłości.
+
+        Zwróć wynik w formacie JSON.
+    `;
+    try {
+        const ai = getAiInstance();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        summary: { type: Type.STRING, description: "Krótkie, jednozdaniowe podsumowanie wyników." },
+                        score: { type: Type.STRING, description: "Jakościowa ocena, np. 'Doskonałe zaangażowanie'." },
+                        positives: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista 2-3 mocnych stron." },
+                        improvements: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista 2-3 obszarów do poprawy." },
+                        suggestions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista 3-5 praktycznych porad na przyszłość." },
+                    }
+                }
+            }
+        });
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as PerformanceAnalysis;
+    } catch (error) {
+        console.error("Error analyzing performance:", error);
+        throw new Error(parseGeminiError(error));
+    }
 };
 
 export const searchRoyaltyFreeMusic = async (query: string, videoDescription: string): Promise<MusicTrack[]> => {
@@ -297,12 +383,29 @@ export const generateThumbnails = async (
     overlayText: string,
     logoFile?: File,
     logoPosition?: string,
-    orientation: 'landscape' | 'portrait' = 'landscape'
+    orientation: 'landscape' | 'portrait' = 'landscape',
+    textEffect: string = 'none',
+    imageFilter: string = 'none'
 ): Promise<ThumbnailSuggestion[]> => {
 
     const orientationPrompt = orientation === 'landscape' 
         ? "Miniaturka musi być w formacie poziomym (16:9)." 
         : "Miniaturka musi być w formacie pionowym (9:16).";
+
+    let textEffectPrompt = '';
+    switch (textEffect) {
+        case 'shadow': textEffectPrompt = 'Tekst powinien mieć subtelny cień, aby wyróżniał się na tle.'; break;
+        case 'outline': textEffectPrompt = 'Tekst powinien mieć cienki, kontrastujący obrys, aby był czytelny.'; break;
+        case 'glow': textEffectPrompt = 'Tekst powinien mieć delikatną poświatę, aby przyciągał wzrok.'; break;
+    }
+
+    let imageFilterPrompt = '';
+    switch (imageFilter) {
+        case 'vibrant': imageFilterPrompt = 'Zastosuj filtr, aby kolory na obrazie były bardziej nasycone i żywe.'; break;
+        case 'grayscale': imageFilterPrompt = 'Przekształć obraz w stylową skalę szarości.'; break;
+        case 'vintage': imageFilterPrompt = 'Nadaj obrazowi wygląd retro/vintage, z ciepłymi tonami i lekkim ziarnem.'; break;
+        case 'high-contrast': imageFilterPrompt = 'Zwiększ kontrast obrazu, aby ciemne obszary były ciemniejsze, a jasne jaśniejsze.'; break;
+    }
     
     const basePrompt = `
         Jesteś grafikiem i ekspertem od marketingu na YouTube. Twoim zadaniem jest stworzenie WARIANTU miniaturki do wideo na podstawie dostarczonego kadru (pierwszy obraz).
@@ -313,8 +416,9 @@ export const generateThumbnails = async (
         Kluczowe Wymagania:
         1.  **Orientacja:** ${orientationPrompt}
         2.  **Baza:** Użyj pierwszego obrazu (klatki wideo) jako tła i głównego elementu.
-        3.  **Branding:** ${logoFile ? 'Nałóż drugi obraz (logo) w rogu zgodnie z poleceniem.' : 'Brak logo do nałożenia.'}
-        4.  **Tekst:** Nałóż chwytliwy tekst na miniaturę. Użyj podanego tekstu lub stwórz własny, bazując na tytule.
+        3.  **Branding:** ${logoFile ? `Nałóż drugi obraz (logo) w rogu zgodnie z poleceniem.` : 'Brak logo do nałożenia.'}
+        4.  **Tekst:** Nałóż chwytliwy tekst na miniaturę. Użyj podanego tekstu lub stwórz własny, bazując na tytule. ${textEffectPrompt}
+        5.  **Filtry i Efekty:** ${imageFilterPrompt || 'Zachowaj naturalne kolory i styl obrazu.'}
         
         Zwróć JEDEN obraz oraz krótki opis stylu, który zastosowałeś.
     `;
@@ -322,7 +426,7 @@ export const generateThumbnails = async (
     const stylePrompts = [
         "**Styl #1: Jaskrawy.** Użyj żywych kolorów, pogrubionej czcionki i wyraźnych konturów, aby maksymalnie przyciągnąć uwagę.",
         "**Styl #2: Elegancki.** Postaw na minimalizm, czystą, nowoczesną typografię i stonowaną, harmonijną paletę barw.",
-        "**Styl #3: Dynamiczny.** Dodaj elementy graficzne jak strzałki lub okręgi i użyj chwytliwego tekstu, aby zachęcić do kliknięcia (wysoki CTR)."
+        "**Styl #3: Dynamiczny.** Dodaj elementy graficzne jak strzałki, okręgi lub linie ruchu, aby stworzyć wrażenie akcji. Użyj energetycznego, chwytliwego tekstu."
     ];
 
 
@@ -393,31 +497,4 @@ export const generateThumbnails = async (
         console.error("Error generating thumbnails:", error);
         throw new Error(parseGeminiError(error));
     }
-};
-
-// FIX: Add analyzeImage function
-export const analyzeImage = async (prompt: string, imageFile: File): Promise<string> => {
-    try {
-        const ai = getAiInstance();
-        const imagePart = await fileToGenerativePart(imageFile);
-        const textPart = { text: prompt };
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [imagePart, textPart] },
-        });
-
-        return response.text;
-    } catch (error) {
-        console.error("Error analyzing image:", error);
-        throw new Error(parseGeminiError(error));
-    }
-};
-
-// FIX: Add getChatInstance function
-export const getChatInstance = (): Chat => {
-    const ai = getAiInstance();
-    return ai.chats.create({
-        model: 'gemini-2.5-flash',
-    });
 };

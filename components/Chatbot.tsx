@@ -4,7 +4,7 @@ import { getChatInstance } from '../services/geminiService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { SendIcon, UserIcon, SparklesIcon } from './Icons';
 // FIX: Correct import for Chat type
-import type { Chat } from '@google/genai';
+import { Chat } from '@google/genai';
 
 const Chatbot: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -29,6 +29,7 @@ const Chatbot: React.FC = () => {
             if (!chatInstanceRef.current) {
                 chatInstanceRef.current = getChatInstance();
             }
+            // FIX: The `sendMessage` method expects an object with a `message` property, not a raw string.
             const response = await chatInstanceRef.current.sendMessage({ message: input });
             const modelMessage: ChatMessage = { role: 'model', parts: [{ text: response.text }] };
             setMessages(prev => [...prev, modelMessage]);
