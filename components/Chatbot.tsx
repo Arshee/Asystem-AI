@@ -44,7 +44,7 @@ const Chatbot: React.FC = () => {
         <div className="max-w-3xl mx-auto flex flex-col h-[75vh] animate-fade-in">
             <div className="text-center mb-6">
                 <h2 className="text-3xl font-extrabold text-white sm:text-4xl">Chat z AI</h2>
-                <p className="mt-2 text-lg text-gray-400">Zadaj pytanie, a Gemini odpowie.</p>
+                <p className="mt-2 text-lg text-gray-400">Zadaj pytanie, a AI odpowie.</p>
             </div>
             <div className="flex-grow bg-base-200 rounded-2xl shadow-lg p-4 flex flex-col overflow-hidden">
                 <div className="flex-grow overflow-y-auto pr-2 space-y-4">
