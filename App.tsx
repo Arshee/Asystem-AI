@@ -1,62 +1,38 @@
+import { useState } from "react";
+import { sendPromptToAI } from "./services/api";
 
-import React, { useState } from 'react';
-import VideoAssistant from './components/VideoAssistant';
-import PerformanceAnalyzer from './components/PerformanceAnalyzer';
-import { LogoIcon } from './components/Icons';
+export default function App() {
+  const [prompt, setPrompt] = useState("");
+  const [response, setResponse] = useState("");
 
-type ActiveView = 'assistant' | 'analyzer';
-
-const App: React.FC = () => {
-  const [activeView, setActiveView] = useState<ActiveView>('assistant');
-
-  const renderView = () => {
-    switch (activeView) {
-      case 'assistant':
-        return <VideoAssistant />;
-      case 'analyzer':
-        return <PerformanceAnalyzer />;
-      default:
-        return <VideoAssistant />;
-    }
+  const handleSubmit = async () => {
+    const aiResponse = await sendPromptToAI(prompt);
+    setResponse(aiResponse);
   };
 
-  const HeaderLink: React.FC<{ view: ActiveView; label: string }> = ({ view, label }) => (
-    <button
-      onClick={() => setActiveView(view)}
-      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-        activeView === view
-          ? 'bg-brand-primary text-base-100'
-          : 'text-gray-300 hover:bg-base-300 hover:text-white'
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
-    <div className="min-h-screen bg-base-100 text-base-content font-sans">
-      <header className="sticky top-0 z-10 bg-base-200/80 backdrop-blur-md shadow-lg">
-        <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setActiveView('assistant')}>
-            <LogoIcon className="h-8 w-8 text-brand-primary" />
-            <h1 className="text-xl font-bold text-white">Asystent Publikacji AI</h1>
-          </div>
-          <nav className="flex items-center space-x-2 md:space-x-4">
-             <HeaderLink view="assistant" label="Asystent Wideo" />
-             <HeaderLink view="analyzer" label="Analiza Wyników" />
-          </nav>
-        </div>
-      </header>
+    <div className="p-6 max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Asystent AI</h1>
+      <textarea
+        className="w-full border rounded p-2 mb-3"
+        rows={4}
+        placeholder="Wpisz prompt..."
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+      />
+      <button
+        onClick={handleSubmit}
+        className="bg-blue-600 text-white px-4 py-2 rounded"
+      >
+        Wyślij do AI
+      </button>
 
-      <main className="container mx-auto p-4 md:p-8">
-        {renderView()}
-      </main>
-      
-      <footer className="text-center py-4 mt-8 text-sm text-gray-500">
-        <p>Stworzone z pasją przy użyciu Gemini API</p>
-      </footer>
+      {response && (
+        <div className="mt-4 p-3 border rounded bg-gray-50">
+          <h2 className="font-semibold">Odpowiedź AI:</h2>
+          <p>{response}</p>
+        </div>
+      )}
     </div>
   );
-};
-
-export default App;
+}
