@@ -4,13 +4,14 @@
  * Frontend nie używa bezpośrednio OpenAI — łączy się z Twoim backendem Render.
  */
 
-export const generateAiResponse = async (prompt: string) => {
+export const generateAiResponse = async (prompt: string): Promise<string> => {
   try {
     // Adres backendu na Render
     const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
+      mode: "cors", // ważne przy komunikacji między domenami
     });
 
     // Sprawdzenie statusu odpowiedzi
@@ -27,8 +28,6 @@ export const generateAiResponse = async (prompt: string) => {
     console.error("❌ Błąd podczas komunikacji z backendem:", error);
 
     // Przyjazny komunikat dla użytkownika
-    throw new Error(
-      "Nie udało się połączyć z serwerem AI. Sprawdź połączenie lub spróbuj ponownie za chwilę."
-    );
+    return "Nie udało się połączyć z serwerem AI. Sprawdź połączenie lub spróbuj ponownie za chwilę.";
   }
 };
