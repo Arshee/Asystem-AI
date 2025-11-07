@@ -1,40 +1,34 @@
 // services/openaiService.ts
-import OpenAI from "openai";
-
-const getAiInstance = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "Brak klucza API. Upewnij się, że zmienna środowiskowa API_KEY (OpenAI) jest poprawnie skonfigurowana."
-    );
-  }
-
-  return new OpenAI({ apiKey });
-};
+/**
+ * Bezpieczny serwis komunikacji z backendem AI.
+ * Frontend nie używa bezpośrednio OpenAI — łączy się z Twoim backendem Render.
+ */
 
 export const generateAiResponse = async (prompt: string) => {
-  const openai = getAiInstance();
-
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // lub "gpt-4o" jeśli masz dostęp
-      messages: [
-        {
-          role: "system",
-          content: "Jesteś pomocnym asystentem do tworzenia treści na social media.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.8,
-      max_tokens: 500,
+    // Adres backendu na Render
+    const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
     });
 
-    return completion.choices[0]?.message?.content || "Brak odpowiedzi od modelu.";
+    // Sprawdzenie statusu odpowiedzi
+    if (!response.ok) {
+      throw new Error(`Błąd serwera (${response.status}): ${response.statusText}`);
+    }
+
+    // Parsowanie JSON-a
+    const data = await response.json();
+
+    // Zwracamy tekst odpowiedzi z backendu
+    return data.response || "Brak odpowiedzi od serwera AI.";
   } catch (error) {
-    console.error("Błąd w komunikacji z OpenAI:", error);
-    throw new Error("Nie udało się uzyskać odpowiedzi z OpenAI.");
+    console.error("❌ Błąd podczas komunikacji z backendem:", error);
+
+    // Przyjazny komunikat dla użytkownika
+    throw new Error(
+      "Nie udało się połączyć z serwerem AI. Sprawdź połączenie lub spróbuj ponownie za chwilę."
+    );
   }
 };
