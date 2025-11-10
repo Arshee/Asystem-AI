@@ -1,13 +1,13 @@
 /**
- * Asystent Wideo oparty o OpenAI (ChatGPT) zamiast Gemini.
- * Wszystkie funkcje łączą się z Twoim backendem Render (https://asystem-ai-backend.onrender.com/api/ai)
+ * 🎬 Asystent Wideo (OpenAI ChatGPT Backend)
+ * Wszystkie funkcje komunikują się z backendem Render:
+ * https://asystem-ai-backend.onrender.com/api/ai
  */
 
 import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack, PerformanceAnalysis } from '../types';
 
 /** 
- * 🧩 Pomocnicza funkcja do komunikacji z Twoim backendem Render 
- * + automatyczne czyszczenie JSON z odpowiedzi modelu
+ * 🧩 Funkcja komunikacji z backendem + automatyczne czyszczenie JSON
  */
 const callBackend = async (prompt: string): Promise<string> => {
   const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
@@ -23,18 +23,13 @@ const callBackend = async (prompt: string): Promise<string> => {
   const data = await response.json();
   const text = data.response || "Brak odpowiedzi od modelu.";
 
-  // 🧹 Próba wyciągnięcia czystego JSON-a z odpowiedzi
+  // 🧹 Wyciągnięcie czystego JSON-a (usuwa przypadkowe opisy od modelu)
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  if (jsonMatch) {
-    return jsonMatch[0];
-  }
-
-  // Jeśli model nie zwrócił JSON-a, oddajemy surowy tekst
-  return text;
+  return jsonMatch ? jsonMatch[0] : text;
 };
 
 /** 
- * 1️⃣ Analiza wyników publikacji (widoki, lajki, komentarze itd.)
+ * 1️⃣ Analiza wyników publikacji
  */
 export const analyzePublicationPerformance = async (
   platform: string,
@@ -46,24 +41,23 @@ export const analyzePublicationPerformance = async (
   goal: string
 ): Promise<PerformanceAnalysis> => {
   const prompt = `
-    Jesteś ekspertem od analizy mediów społecznościowych. Twoim zadaniem jest ocena wyników publikacji i dostarczenie praktycznych wskazówek.
-
-    Dane wejściowe:
+    Przeanalizuj wyniki publikacji w mediach społecznościowych.
+    Dane:
     - Platforma: ${platform}
-    - Tytuł/Opis: "${title}"
+    - Tytuł: "${title}"
     - Wyświetlenia: ${views}
     - Polubienia: ${likes}
     - Komentarze: ${comments}
     - Udostępnienia: ${shares}
-    - Cel publikacji: ${goal}
+    - Cel: ${goal}
 
-    Wygeneruj analizę w formacie JSON z polami:
+    Zwróć czysty JSON:
     {
       "summary": "krótkie podsumowanie",
-      "score": "np. bardzo dobre zaangażowanie",
+      "score": "np. dobre zaangażowanie",
       "positives": ["mocna strona 1", "mocna strona 2"],
       "improvements": ["obszar 1", "obszar 2"],
-      "suggestions": ["praktyczna porada 1", "porada 2"]
+      "suggestions": ["porada 1", "porada 2"]
     }
   `;
   const response = await callBackend(prompt);
@@ -76,18 +70,17 @@ export const analyzePublicationPerformance = async (
 };
 
 /** 
- * 2️⃣ Generowanie kategorii i tagów z nazwy pliku
+ * 2️⃣ Generowanie kategorii i tagów
  */
 export const generateCategoryAndTags = async (filename: string): Promise<CategoryAndTags> => {
   const prompt = `
-    Przeanalizuj nazwę pliku wideo: "${filename}"
-    i wygeneruj JSON zawierający:
+    Przeanalizuj nazwę pliku: "${filename}" i zwróć czysty JSON:
     {
-      "youtubeCategory": "...",
-      "generalCategory": "...",
-      "primaryKeyword": "...",
-      "youtubeTags": ["tag1", "tag2", "tag3"],
-      "socialHashtags": ["#hashtag1", "#hashtag2"]
+      "youtubeCategory": "Nauka i technika",
+      "generalCategory": "Recenzja technologiczna",
+      "primaryKeyword": "recenzja laptopa gamingowego",
+      "youtubeTags": ["recenzja", "gaming", "laptop"],
+      "socialHashtags": ["#tech", "#recenzja", "#gaming"]
     }
   `;
   const response = await callBackend(prompt);
@@ -99,15 +92,17 @@ export const generateCategoryAndTags = async (filename: string): Promise<Categor
 };
 
 /** 
- * 3️⃣ Generowanie tytułów na podstawie pliku i słów kluczowych
+ * 3️⃣ Generowanie tytułów na podstawie pliku i frazy
  */
 export const generateTitlesFromFilename = async (filename: string, primaryKeyword: string): Promise<TitleSuggestions> => {
   const prompt = `
-    Stwórz chwytliwe tytuły dla filmu o nazwie "${filename}" z głównym słowem kluczowym "${primaryKeyword}".
-    Zwróć JSON:
+    Na podstawie nazwy pliku "${filename}" i frazy "${primaryKeyword}" stwórz 3 chwytliwe tytuły YouTube
+    oraz 1 krótki nagłówek na Reels/TikTok.
+    
+    Zwróć czysty JSON:
     {
       "youtubeTitles": ["Tytuł 1", "Tytuł 2", "Tytuł 3"],
-      "socialHeadline": "krótki nagłówek do Reels/TikToka"
+      "socialHeadline": "Nagłówek"
     }
   `;
   const response = await callBackend(prompt);
@@ -119,7 +114,7 @@ export const generateTitlesFromFilename = async (filename: string, primaryKeywor
 };
 
 /** 
- * 4️⃣ Generowanie planu publikacji (meta, opis, hasztagi, harmonogram)
+ * 4️⃣ Plan publikacji (opis, hasztagi, harmonogram)
  */
 export const generatePublicationPlan = async (
   title: string,
@@ -132,17 +127,20 @@ export const generatePublicationPlan = async (
     : "Brak muzyki w tle.";
 
   const prompt = `
-    Stwórz plan publikacji dla wideo o tytule "${title}" w kategorii "${categories}" i tonie "${tone}".
-    ${musicText}
-    
+    Opracuj plan publikacji dla filmu:
+    - Tytuł: "${title}"
+    - Kategorie: ${categories}
+    - Ton: ${tone}
+    - ${musicText}
+
     Uwzględnij:
-    - Opisy dla YouTube, TikTok, Instagram, Facebook (dopasowane długości)
-    - Hasztagi w 3 zestawach: duże, średnie, małe
-    - Harmonogram publikacji (platforma + data + godzina)
+    - Opisy dla YouTube, TikTok, Instagram, Facebook
+    - Harmonogram (platforma + data + godzina)
+    - Hasztagi (duże, średnie, małe)
     
-    Zwróć wynik w formacie JSON:
+    Zwróć czysty JSON:
     {
-      "schedule": [{"platform": "YouTube", "time": "2025-11-08 18:00"}],
+      "schedule": [{"platform": "YouTube", "time": "2025-11-10 18:00"}],
       "descriptions": [{"platform": "TikTok", "text": "..."}],
       "hashtags": [{"platform": "YouTube", "sets": {"large": [], "medium": [], "small": []}}]
     }
@@ -156,16 +154,19 @@ export const generatePublicationPlan = async (
 };
 
 /** 
- * 5️⃣ Wyszukiwanie muzyki royalty-free (fikcyjne wyniki do inspiracji)
+ * 5️⃣ Wyszukiwanie muzyki royalty-free (fikcyjne)
  */
 export const searchRoyaltyFreeMusic = async (query: string, videoDescription: string): Promise<MusicTrack[]> => {
   const prompt = `
-    Znajdź 5 fikcyjnych, idealnie pasujących utworów royalty-free na podstawie:
-    - Zapytania: "${query}"
-    - Opisu: "${videoDescription}"
+    Znajdź 5 dopasowanych utworów royalty-free.
+    Zapytanie: "${query}"
+    Opis: "${videoDescription}"
     
-    Dla każdego utworu zwróć JSON:
-    [{"name": "...", "artist": "...", "mood": "..."}]
+    Zwróć czysty JSON:
+    [
+      {"name": "Epic Sunrise", "artist": "FreeBeats", "mood": "inspirujący"},
+      {"name": "Tech Flow", "artist": "AudioWave", "mood": "nowoczesny"}
+    ]
   `;
   const response = await callBackend(prompt);
   try {
@@ -176,7 +177,7 @@ export const searchRoyaltyFreeMusic = async (query: string, videoDescription: st
 };
 
 /** 
- * 6️⃣ Generowanie miniatur (tekstowy opis koncepcji)
+ * 6️⃣ Generowanie miniatur — koncepcje opisowe (JSON)
  */
 export const generateThumbnails = async (
   videoFrame: File,
@@ -184,12 +185,17 @@ export const generateThumbnails = async (
   overlayText: string
 ): Promise<ThumbnailSuggestion[]> => {
   const prompt = `
-    Opisz 3 koncepcje miniatur dla filmu o tytule "${title}".
-    Dla każdej podaj:
-    - "description": opis stylu (np. dynamiczny, minimalny, jaskrawy)
-    - "imageData": null (generacja grafiki nieobsługiwana)
+    Stwórz 3 koncepcje miniatur dla filmu "${title}".
+    Każda koncepcja ma mieć:
+    - description: opis stylu (np. jaskrawy, elegancki, dynamiczny)
+    - imageData: null
     
-    Zwróć JSON: [{"description": "...", "imageData": null}]
+    Zwróć czysty JSON:
+    [
+      {"description": "Dynamiczny styl z kontrastowymi kolorami", "imageData": null},
+      {"description": "Minimalistyczny, jasne tło, elegancki font", "imageData": null},
+      {"description": "Soczyste kolory i duży tekst przyciągający uwagę", "imageData": null}
+    ]
   `;
   const response = await callBackend(prompt);
   try {
