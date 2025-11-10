@@ -1,4 +1,3 @@
-// services/openaiService.ts
 /**
  * Asystent Wideo oparty o OpenAI (ChatGPT) zamiast Gemini.
  * Wszystkie funkcje łączą się z Twoim backendem Render (https://asystem-ai-backend.onrender.com/api/ai)
@@ -7,7 +6,8 @@
 import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack, PerformanceAnalysis } from '../types';
 
 /** 
- * Pomocnicza funkcja do komunikacji z Twoim backendem Render 
+ * 🧩 Pomocnicza funkcja do komunikacji z Twoim backendem Render 
+ * + automatyczne czyszczenie JSON z odpowiedzi modelu
  */
 const callBackend = async (prompt: string): Promise<string> => {
   const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
@@ -21,7 +21,16 @@ const callBackend = async (prompt: string): Promise<string> => {
   }
 
   const data = await response.json();
-  return data.response || "Brak odpowiedzi od modelu.";
+  const text = data.response || "Brak odpowiedzi od modelu.";
+
+  // 🧹 Próba wyciągnięcia czystego JSON-a z odpowiedzi
+  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (jsonMatch) {
+    return jsonMatch[0];
+  }
+
+  // Jeśli model nie zwrócił JSON-a, oddajemy surowy tekst
+  return text;
 };
 
 /** 
@@ -58,7 +67,12 @@ export const analyzePublicationPerformance = async (
     }
   `;
   const response = await callBackend(prompt);
-  return JSON.parse(response);
+  try {
+    return JSON.parse(response);
+  } catch {
+    console.warn("⚠️ Niepoprawny JSON, zwracam tekst:", response);
+    return { summary: response } as PerformanceAnalysis;
+  }
 };
 
 /** 
@@ -77,7 +91,11 @@ export const generateCategoryAndTags = async (filename: string): Promise<Categor
     }
   `;
   const response = await callBackend(prompt);
-  return JSON.parse(response);
+  try {
+    return JSON.parse(response);
+  } catch {
+    return { youtubeCategory: "", generalCategory: "", primaryKeyword: "", youtubeTags: [], socialHashtags: [] };
+  }
 };
 
 /** 
@@ -93,7 +111,11 @@ export const generateTitlesFromFilename = async (filename: string, primaryKeywor
     }
   `;
   const response = await callBackend(prompt);
-  return JSON.parse(response);
+  try {
+    return JSON.parse(response);
+  } catch {
+    return { youtubeTitles: [], socialHeadline: "Brak danych" };
+  }
 };
 
 /** 
@@ -126,7 +148,11 @@ export const generatePublicationPlan = async (
     }
   `;
   const response = await callBackend(prompt);
-  return JSON.parse(response);
+  try {
+    return JSON.parse(response);
+  } catch {
+    return { schedule: [], descriptions: [], hashtags: [] };
+  }
 };
 
 /** 
@@ -142,7 +168,11 @@ export const searchRoyaltyFreeMusic = async (query: string, videoDescription: st
     [{"name": "...", "artist": "...", "mood": "..."}]
   `;
   const response = await callBackend(prompt);
-  return JSON.parse(response);
+  try {
+    return JSON.parse(response);
+  } catch {
+    return [];
+  }
 };
 
 /** 
@@ -162,5 +192,9 @@ export const generateThumbnails = async (
     Zwróć JSON: [{"description": "...", "imageData": null}]
   `;
   const response = await callBackend(prompt);
-  return JSON.parse(response);
+  try {
+    return JSON.parse(response);
+  } catch {
+    return [{ description: "Nie udało się wygenerować miniatury", imageData: null }];
+  }
 };
