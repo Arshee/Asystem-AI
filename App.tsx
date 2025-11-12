@@ -1,4 +1,4 @@
-// src/App.tsx
+// src/App.tsx 
 import React, { useState } from "react";
 import VideoAssistant from "./components/VideoAssistant";
 import PerformanceAnalyzer from "./components/PerformanceAnalyzer";
