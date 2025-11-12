@@ -27,6 +27,26 @@ const callBackend = async (prompt: string): Promise<string> => {
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   return jsonMatch ? jsonMatch[0] : text;
 };
+// services/openaiService.ts
+export const callBackend = async (prompt: string, token: string): Promise<string> => {
+  const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": token
+    },
+    body: JSON.stringify({ prompt }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Błąd serwera (${response.status}): ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const text = data.response || "Brak odpowiedzi od modelu.";
+  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  return jsonMatch ? jsonMatch[0] : text;
+};
 
 /** 
  * 1️⃣ Analiza wyników publikacji
