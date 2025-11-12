@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import VideoAssistant from "./components/VideoAssistant";
 import PerformanceAnalyzer from "./components/PerformanceAnalyzer";
 import { LogoIcon } from "./components/Icons";
-import Login from "./src/Login";
+import Login from "./Login";
 
 type ActiveView = "assistant" | "analyzer";
 
