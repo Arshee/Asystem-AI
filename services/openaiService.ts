@@ -6,28 +6,38 @@
 
 import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack, PerformanceAnalysis } from '../types';
 
-/** 
- * 🧩 Funkcja komunikacji z backendem + automatyczne czyszczenie JSON
+/**
+ * 🧩 Pomocnicza funkcja komunikacji z backendem + obsługa autoryzacji
  */
-const callBackend = async (prompt: string): Promise<string> => {
+export const callBackend = async (prompt: string): Promise<string> => {
+  // Pobranie tokena z localStorage (otrzymanego po zalogowaniu)
+  const token = localStorage.getItem("authToken");
+
   const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": token || "", // 👈 ważne!
+    },
     body: JSON.stringify({ prompt }),
   });
 
   if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error("Brak dostępu — zaloguj się ponownie.");
+    }
     throw new Error(`Błąd serwera (${response.status}): ${response.statusText}`);
   }
 
   const data = await response.json();
   const text = data.response || "Brak odpowiedzi od modelu.";
 
-  // 🧹 Wyciągnięcie czystego JSON-a (usuwa przypadkowe opisy od modelu)
+  // 🧹 Wyciągnięcie czystego JSON-a z odpowiedzi modelu
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   return jsonMatch ? jsonMatch[0] : text;
 };
-/** 
+
+/**
  * 1️⃣ Analiza wyników publikacji
  */
 export const analyzePublicationPerformance = async (
@@ -68,7 +78,7 @@ export const analyzePublicationPerformance = async (
   }
 };
 
-/** 
+/**
  * 2️⃣ Generowanie kategorii i tagów
  */
 export const generateCategoryAndTags = async (filename: string): Promise<CategoryAndTags> => {
@@ -90,8 +100,8 @@ export const generateCategoryAndTags = async (filename: string): Promise<Categor
   }
 };
 
-/** 
- * 3️⃣ Generowanie tytułów na podstawie pliku i frazy
+/**
+ * 3️⃣ Generowanie tytułów
  */
 export const generateTitlesFromFilename = async (filename: string, primaryKeyword: string): Promise<TitleSuggestions> => {
   const prompt = `
@@ -112,8 +122,8 @@ export const generateTitlesFromFilename = async (filename: string, primaryKeywor
   }
 };
 
-/** 
- * 4️⃣ Plan publikacji (opis, hasztagi, harmonogram)
+/**
+ * 4️⃣ Plan publikacji
  */
 export const generatePublicationPlan = async (
   title: string,
@@ -152,8 +162,8 @@ export const generatePublicationPlan = async (
   }
 };
 
-/** 
- * 5️⃣ Wyszukiwanie muzyki royalty-free (fikcyjne)
+/**
+ * 5️⃣ Wyszukiwanie muzyki royalty-free
  */
 export const searchRoyaltyFreeMusic = async (query: string, videoDescription: string): Promise<MusicTrack[]> => {
   const prompt = `
@@ -175,8 +185,8 @@ export const searchRoyaltyFreeMusic = async (query: string, videoDescription: st
   }
 };
 
-/** 
- * 6️⃣ Generowanie miniatur — koncepcje opisowe (JSON)
+/**
+ * 6️⃣ Generowanie miniatur
  */
 export const generateThumbnails = async (
   videoFrame: File,
