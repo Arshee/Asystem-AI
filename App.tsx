@@ -1,9 +1,9 @@
-// src/App.tsx
+// ../App.tsx
 import React, { useState, useEffect } from "react";
 import VideoAssistant from "./components/VideoAssistant";
 import PerformanceAnalyzer from "./components/PerformanceAnalyzer";
 import { LogoIcon } from "./components/Icons";
-import Login from "../Login"; // 👈 jeśli plik Login.tsx jest w głównym folderze, a nie w src
+import Login from "./Login"; // 👈 jeśli plik Login.tsx jest w głównym folderze, a nie w src
 
 type ActiveView = "assistant" | "analyzer";
 
