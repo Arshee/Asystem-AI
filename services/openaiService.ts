@@ -37,31 +37,33 @@ export const login = async (password: string): Promise<boolean> => {
 };
 
 /**
- * 🧩 Funkcja komunikacji z backendem + autoryzacja tokenem
+ * 🧩 Funkcja komunikacji z backendem z autoryzacją tokenem
  */
-const callBackend = async (prompt: string): Promise<string> => {
-  const token = localStorage.getItem("authToken");
-
-  if (!token) throw new Error("❌ Brak tokena logowania — zaloguj się ponownie.");
-
-  const response = await fetch(`${API_URL}/api/ai`, {
+export const callBackend = async (prompt: string, token?: string): Promise<string> => {
+  const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: token,
+      ...(token ? { Authorization: token } : {}), // 👈 dodaj token jeśli jest
     },
     body: JSON.stringify({ prompt }),
   });
 
   if (!response.ok) {
     if (response.status === 403) {
-      throw new Error("🚫 Brak dostępu — zaloguj się ponownie.");
+      throw new Error("⛔ Brak autoryzacji – zaloguj się ponownie.");
     }
     throw new Error(`Błąd serwera (${response.status}): ${response.statusText}`);
   }
 
   const data = await response.json();
   const text = data.response || "Brak odpowiedzi od modelu.";
+
+  // 🧹 Wyciągnięcie czystego JSON-a (usuwa przypadkowe opisy od modelu)
+  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  return jsonMatch ? jsonMatch[0] : text;
+};
+
 
   // 🧹 Wyciągnięcie czystego JSON-a (bez tekstu od modelu)
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
