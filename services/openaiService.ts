@@ -1,30 +1,61 @@
 /**
  * 🎬 Asystent Wideo (OpenAI ChatGPT Backend)
  * Wszystkie funkcje komunikują się z backendem Render:
- * https://asystem-ai-backend.onrender.com/api/ai
+ * https://asystem-ai-backend.onrender.com
  */
 
 import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack, PerformanceAnalysis } from '../types';
 
+const API_URL = "https://asystem-ai-backend.onrender.com";
+
 /**
- * 🧩 Pomocnicza funkcja komunikacji z backendem + obsługa autoryzacji
+ * 🔐 Logowanie — wysyła hasło do backendu i zapisuje token
  */
-export const callBackend = async (prompt: string): Promise<string> => {
-  // Pobranie tokena z localStorage (otrzymanego po zalogowaniu)
+export const login = async (password: string): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_URL}/api/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+
+    if (!res.ok) {
+      console.error("❌ Logowanie nie powiodło się:", res.status);
+      return false;
+    }
+
+    const data = await res.json();
+    if (data.success && data.token) {
+      localStorage.setItem("authToken", data.token);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error("⚠️ Błąd połączenia z serwerem:", err);
+    throw new Error("⚠️ Błąd połączenia z serwerem.");
+  }
+};
+
+/**
+ * 🧩 Funkcja komunikacji z backendem + autoryzacja tokenem
+ */
+const callBackend = async (prompt: string): Promise<string> => {
   const token = localStorage.getItem("authToken");
 
-  const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
+  if (!token) throw new Error("❌ Brak tokena logowania — zaloguj się ponownie.");
+
+  const response = await fetch(`${API_URL}/api/ai`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": token || "", // 👈 ważne!
+      Authorization: token,
     },
     body: JSON.stringify({ prompt }),
   });
 
   if (!response.ok) {
     if (response.status === 403) {
-      throw new Error("Brak dostępu — zaloguj się ponownie.");
+      throw new Error("🚫 Brak dostępu — zaloguj się ponownie.");
     }
     throw new Error(`Błąd serwera (${response.status}): ${response.statusText}`);
   }
@@ -32,7 +63,7 @@ export const callBackend = async (prompt: string): Promise<string> => {
   const data = await response.json();
   const text = data.response || "Brak odpowiedzi od modelu.";
 
-  // 🧹 Wyciągnięcie czystego JSON-a z odpowiedzi modelu
+  // 🧹 Wyciągnięcie czystego JSON-a (bez tekstu od modelu)
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   return jsonMatch ? jsonMatch[0] : text;
 };
@@ -50,8 +81,7 @@ export const analyzePublicationPerformance = async (
   goal: string
 ): Promise<PerformanceAnalysis> => {
   const prompt = `
-    Przeanalizuj wyniki publikacji w mediach społecznościowych.
-    Dane:
+    Przeanalizuj wyniki publikacji w mediach społecznościowych:
     - Platforma: ${platform}
     - Tytuł: "${title}"
     - Wyświetlenia: ${views}
@@ -60,22 +90,17 @@ export const analyzePublicationPerformance = async (
     - Udostępnienia: ${shares}
     - Cel: ${goal}
 
-    Zwróć czysty JSON:
+    Zwróć JSON:
     {
       "summary": "krótkie podsumowanie",
-      "score": "np. dobre zaangażowanie",
-      "positives": ["mocna strona 1", "mocna strona 2"],
-      "improvements": ["obszar 1", "obszar 2"],
-      "suggestions": ["porada 1", "porada 2"]
+      "score": "ocena",
+      "positives": ["mocne strony"],
+      "improvements": ["obszary do poprawy"],
+      "suggestions": ["praktyczne porady"]
     }
   `;
   const response = await callBackend(prompt);
-  try {
-    return JSON.parse(response);
-  } catch {
-    console.warn("⚠️ Niepoprawny JSON, zwracam tekst:", response);
-    return { summary: response } as PerformanceAnalysis;
-  }
+  return JSON.parse(response);
 };
 
 /**
@@ -83,43 +108,36 @@ export const analyzePublicationPerformance = async (
  */
 export const generateCategoryAndTags = async (filename: string): Promise<CategoryAndTags> => {
   const prompt = `
-    Przeanalizuj nazwę pliku: "${filename}" i zwróć czysty JSON:
+    Przeanalizuj nazwę pliku: "${filename}" i zwróć JSON:
     {
-      "youtubeCategory": "Nauka i technika",
-      "generalCategory": "Recenzja technologiczna",
-      "primaryKeyword": "recenzja laptopa gamingowego",
-      "youtubeTags": ["recenzja", "gaming", "laptop"],
-      "socialHashtags": ["#tech", "#recenzja", "#gaming"]
+      "youtubeCategory": "Kategoria",
+      "generalCategory": "Tematyka",
+      "primaryKeyword": "fraza kluczowa",
+      "youtubeTags": ["tag1", "tag2"],
+      "socialHashtags": ["#hashtag1", "#hashtag2"]
     }
   `;
   const response = await callBackend(prompt);
-  try {
-    return JSON.parse(response);
-  } catch {
-    return { youtubeCategory: "", generalCategory: "", primaryKeyword: "", youtubeTags: [], socialHashtags: [] };
-  }
+  return JSON.parse(response);
 };
 
 /**
  * 3️⃣ Generowanie tytułów
  */
-export const generateTitlesFromFilename = async (filename: string, primaryKeyword: string): Promise<TitleSuggestions> => {
+export const generateTitlesFromFilename = async (
+  filename: string,
+  primaryKeyword: string
+): Promise<TitleSuggestions> => {
   const prompt = `
-    Na podstawie nazwy pliku "${filename}" i frazy "${primaryKeyword}" stwórz 3 chwytliwe tytuły YouTube
-    oraz 1 krótki nagłówek na Reels/TikTok.
-    
-    Zwróć czysty JSON:
+    Na podstawie "${filename}" i słowa "${primaryKeyword}" stwórz 3 tytuły YouTube i 1 nagłówek do Reels/TikTok.
+    Zwróć JSON:
     {
       "youtubeTitles": ["Tytuł 1", "Tytuł 2", "Tytuł 3"],
       "socialHeadline": "Nagłówek"
     }
   `;
   const response = await callBackend(prompt);
-  try {
-    return JSON.parse(response);
-  } catch {
-    return { youtubeTitles: [], socialHeadline: "Brak danych" };
-  }
+  return JSON.parse(response);
 };
 
 /**
@@ -132,22 +150,14 @@ export const generatePublicationPlan = async (
   selectedMusic: MusicTrack | null
 ): Promise<PublicationPlan> => {
   const musicText = selectedMusic
-    ? `Muzyka w tle: ${selectedMusic.name} (${selectedMusic.artist})`
+    ? `Muzyka: ${selectedMusic.name} (${selectedMusic.artist})`
     : "Brak muzyki w tle.";
 
   const prompt = `
-    Opracuj plan publikacji dla filmu:
-    - Tytuł: "${title}"
-    - Kategorie: ${categories}
-    - Ton: ${tone}
-    - ${musicText}
+    Opracuj plan publikacji dla filmu "${title}".
+    Kategorie: ${categories}, Ton: ${tone}, ${musicText}
 
-    Uwzględnij:
-    - Opisy dla YouTube, TikTok, Instagram, Facebook
-    - Harmonogram (platforma + data + godzina)
-    - Hasztagi (duże, średnie, małe)
-    
-    Zwróć czysty JSON:
+    Zwróć JSON:
     {
       "schedule": [{"platform": "YouTube", "time": "2025-11-10 18:00"}],
       "descriptions": [{"platform": "TikTok", "text": "..."}],
@@ -155,38 +165,27 @@ export const generatePublicationPlan = async (
     }
   `;
   const response = await callBackend(prompt);
-  try {
-    return JSON.parse(response);
-  } catch {
-    return { schedule: [], descriptions: [], hashtags: [] };
-  }
+  return JSON.parse(response);
 };
 
 /**
- * 5️⃣ Wyszukiwanie muzyki royalty-free
+ * 5️⃣ Muzyka royalty-free (fikcyjna)
  */
-export const searchRoyaltyFreeMusic = async (query: string, videoDescription: string): Promise<MusicTrack[]> => {
+export const searchRoyaltyFreeMusic = async (
+  query: string,
+  videoDescription: string
+): Promise<MusicTrack[]> => {
   const prompt = `
-    Znajdź 5 dopasowanych utworów royalty-free.
-    Zapytanie: "${query}"
-    Opis: "${videoDescription}"
-    
-    Zwróć czysty JSON:
-    [
-      {"name": "Epic Sunrise", "artist": "FreeBeats", "mood": "inspirujący"},
-      {"name": "Tech Flow", "artist": "AudioWave", "mood": "nowoczesny"}
-    ]
+    Znajdź 5 fikcyjnych utworów royalty-free na podstawie:
+    "${query}" / "${videoDescription}".
+    Zwróć JSON: [{"name": "Epic Tune", "artist": "FreeSound", "mood": "energetyczny"}]
   `;
   const response = await callBackend(prompt);
-  try {
-    return JSON.parse(response);
-  } catch {
-    return [];
-  }
+  return JSON.parse(response);
 };
 
 /**
- * 6️⃣ Generowanie miniatur
+ * 6️⃣ Miniatury
  */
 export const generateThumbnails = async (
   videoFrame: File,
@@ -194,22 +193,14 @@ export const generateThumbnails = async (
   overlayText: string
 ): Promise<ThumbnailSuggestion[]> => {
   const prompt = `
-    Stwórz 3 koncepcje miniatur dla filmu "${title}".
-    Każda koncepcja ma mieć:
-    - description: opis stylu (np. jaskrawy, elegancki, dynamiczny)
-    - imageData: null
-    
-    Zwróć czysty JSON:
+    Opisz 3 koncepcje miniatur dla filmu "${title}".
+    JSON:
     [
-      {"description": "Dynamiczny styl z kontrastowymi kolorami", "imageData": null},
-      {"description": "Minimalistyczny, jasne tło, elegancki font", "imageData": null},
-      {"description": "Soczyste kolory i duży tekst przyciągający uwagę", "imageData": null}
+      {"description": "Dynamiczny, kontrastowy", "imageData": null},
+      {"description": "Minimalistyczny, czysty styl", "imageData": null},
+      {"description": "Jaskrawy, typowo social mediowy", "imageData": null}
     ]
   `;
   const response = await callBackend(prompt);
-  try {
-    return JSON.parse(response);
-  } catch {
-    return [{ description: "Nie udało się wygenerować miniatury", imageData: null }];
-  }
+  return JSON.parse(response);
 };
