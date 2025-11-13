@@ -1,9 +1,9 @@
-// src/App.tsx 
-import React, { useState } from "react";
+// src/App.tsx
+import React, { useState, useEffect } from "react";
 import VideoAssistant from "./components/VideoAssistant";
 import PerformanceAnalyzer from "./components/PerformanceAnalyzer";
 import { LogoIcon } from "./components/Icons";
-import Login from "./Login";
+import Login from "../Login"; // 👈 jeśli plik Login.tsx jest w głównym folderze, a nie w src
 
 type ActiveView = "assistant" | "analyzer";
 
@@ -11,23 +11,44 @@ const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("assistant");
 
+  // 🔐 przy starcie odczytujemy token z localStorage (jeśli wcześniej był)
+  useEffect(() => {
+    const savedToken = localStorage.getItem("authToken");
+    if (savedToken) {
+      setToken(savedToken);
+    }
+  }, []);
+
+  // 🔑 po zalogowaniu zapisujemy token
+  const handleLogin = (newToken: string) => {
+    setToken(newToken);
+    localStorage.setItem("authToken", newToken);
+  };
+
+  // 🚪 wylogowanie
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    setToken(null);
+  };
+
+  // jeśli użytkownik nie jest zalogowany — pokaż ekran logowania
   if (!token) {
-    return <Login onLogin={setToken} />;
+    return <Login onLogin={handleLogin} />;
   }
 
-  const handleLogout = () => setToken(null);
-
+  // 🧩 wybór widoku (asystent / analiza)
   const renderView = () => {
     switch (activeView) {
       case "assistant":
-        return <VideoAssistant />;
+        return <VideoAssistant token={token} />; // 👈 przekazujemy token
       case "analyzer":
-        return <PerformanceAnalyzer />;
+        return <PerformanceAnalyzer token={token} />;
       default:
-        return <VideoAssistant />;
+        return <VideoAssistant token={token} />;
     }
   };
 
+  // 🧭 element nawigacyjny w nagłówku
   const HeaderLink: React.FC<{ view: ActiveView; label: string }> = ({
     view,
     label,
@@ -44,6 +65,7 @@ const App: React.FC = () => {
     </button>
   );
 
+  // 🧱 główna struktura interfejsu
   return (
     <div className="min-h-screen bg-base-100 text-base-content font-sans">
       <header className="sticky top-0 z-10 bg-base-200/80 backdrop-blur-md shadow-lg">
