@@ -1,15 +1,18 @@
-/**
- * 🎬 Asystent Wideo (OpenAI ChatGPT Backend)
- * Wszystkie funkcje komunikują się z backendem Render:
- * https://asystem-ai-backend.onrender.com
- */
+// services/openaiService.ts
 
-import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack, PerformanceAnalysis } from '../types';
+import {
+  PublicationPlan,
+  TitleSuggestions,
+  ThumbnailSuggestion,
+  CategoryAndTags,
+  MusicTrack,
+  PerformanceAnalysis,
+} from "../types";
 
 const API_URL = "https://asystem-ai-backend.onrender.com";
 
 /**
- * 🔐 Logowanie — wysyła hasło do backendu i zapisuje token
+ * 🔐 Logowanie — wysyła hasło do backendu
  */
 export const login = async (password: string): Promise<boolean> => {
   try {
@@ -32,19 +35,22 @@ export const login = async (password: string): Promise<boolean> => {
     return false;
   } catch (err) {
     console.error("⚠️ Błąd połączenia z serwerem:", err);
-    throw new Error("⚠️ Błąd połączenia z serwerem.");
+    return false;
   }
 };
 
 /**
- * 🧩 Funkcja komunikacji z backendem z autoryzacją tokenem
+ * 🧩 Funkcja komunikacji z backendem
  */
-export const callBackend = async (prompt: string, token?: string): Promise<string> => {
-  const response = await fetch("https://asystem-ai-backend.onrender.com/api/ai", {
+export const callBackend = async (
+  prompt: string,
+  token?: string
+): Promise<string> => {
+  const response = await fetch(`${API_URL}/api/ai`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: token } : {}), // 👈 dodaj token jeśli jest
+      ...(token ? { Authorization: token } : {}),
     },
     body: JSON.stringify({ prompt }),
   });
@@ -59,13 +65,6 @@ export const callBackend = async (prompt: string, token?: string): Promise<strin
   const data = await response.json();
   const text = data.response || "Brak odpowiedzi od modelu.";
 
-  // 🧹 Wyciągnięcie czystego JSON-a (usuwa przypadkowe opisy od modelu)
-  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  return jsonMatch ? jsonMatch[0] : text;
-};
-
-
-  // 🧹 Wyciągnięcie czystego JSON-a (bez tekstu od modelu)
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   return jsonMatch ? jsonMatch[0] : text;
 };
@@ -108,9 +107,12 @@ export const analyzePublicationPerformance = async (
 /**
  * 2️⃣ Generowanie kategorii i tagów
  */
-export const generateCategoryAndTags = async (filename: string): Promise<CategoryAndTags> => {
+export const generateCategoryAndTags = async (
+  filename: string
+): Promise<CategoryAndTags> => {
   const prompt = `
-    Przeanalizuj nazwę pliku: "${filename}" i zwróć JSON:
+    Przeanalizuj nazwę pliku: "${filename}"
+    i zwróć JSON:
     {
       "youtubeCategory": "Kategoria",
       "generalCategory": "Tematyka",
