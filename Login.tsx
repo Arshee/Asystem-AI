@@ -1,4 +1,4 @@
-// ./Login.tsx
+// Login.tsx
 import React, { useState } from "react";
 
 interface LoginProps {
@@ -23,14 +23,25 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         body: JSON.stringify({ password }),
       });
 
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError("❌ Niepoprawne hasło.");
+        } else {
+          setError("⚠️ Błąd serwera. Spróbuj ponownie.");
+        }
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
 
-      if (data.success && data.token) {
+      if (data && data.success && data.token) {
         onLogin(data.token);
       } else {
-        setError("❌ Niepoprawne hasło.");
+        setError("❌ Niepoprawne dane logowania.");
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError("⚠️ Błąd połączenia z serwerem.");
     } finally {
       setLoading(false);
