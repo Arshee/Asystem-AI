@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     setToken(null);
+    // optional: reload page or clear state
   };
 
   if (!token) return <Login onLogin={handleLogin} />;
