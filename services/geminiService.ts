@@ -1,78 +1,108 @@
-// FIX: Import Chat type for getChatInstance function
-import { GoogleGenAI, Type, Modality, Chat } from "@google/genai";
-import { PublicationPlan, TitleSuggestions, ThumbnailSuggestion, CategoryAndTags, MusicTrack, PerformanceAnalysis } from '../types';
+// Frontend → Backend proxy
+// NIE używa Gemini SDK, NIE używa API_KEY — tylko wysyła dane do backendu.
 
-// Helper to translate technical errors into user-friendly messages.
-const parseGeminiError = (error: unknown): string => {
-    if (error instanceof Error) {
-        const message = error.message;
-        if (message.includes('API key not valid')) {
-            return "Klucz API jest nieprawidłowy. Sprawdź, czy został poprawnie skonfigurowany w ustawieniach wdrożenia.";
-        }
-        if (message.includes('429')) {
-            return "Osiągnięto limit zapytań do API (quota). Spróbuj ponownie za chwilę.";
-        }
-        if (message.includes('500') || message.includes('503')) {
-            return "Usługa Gemini jest tymczasowo niedostępna. Spróbuj ponownie później.";
-        }
-        const coreMessageMatch = message.match(/\[GoogleGenerativeAI Error\]:\s*(.*)/);
-        if (coreMessageMatch && coreMessageMatch[1]) {
-            return `Błąd API Gemini: ${coreMessageMatch[1]}`;
-        }
-        return message;
-    }
-    return 'Wystąpił nieznany błąd. Sprawdź konsolę po więcej informacji.';
-};
+const BACKEND_URL = "https://asystem-ai-backend.onrender.com";
 
-
-const getAiInstance = () => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-        throw new Error("Brak klucza API. Upewnij się, że zmienna środowiskowa API_KEY jest poprawnie skonfigurowana w ustawieniach wdrożenia.");
-    }
-    return new GoogleGenAI({ apiKey });
-};
-
-const fileToGenerativePart = async (file: File) => {
-  const base64EncodedDataPromise = new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-    reader.readAsDataURL(file);
-  });
-  return {
-    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
-  };
-};
-
-// FIX: Add missing getChatInstance function for the chatbot component.
-export const getChatInstance = (): Chat => {
-    const ai = getAiInstance();
-    return ai.chats.create({
-        model: 'gemini-2.5-flash',
-        config: {
-            systemInstruction: 'Jesteś pomocnym asystentem AI. Odpowiadaj na pytania użytkownika zwięźle i precyz-yjnie.',
+// -------------------------------
+// Helper – uniwersalne wywołanie backendu JSON AI
+// -------------------------------
+const callAI = async (prompt: string, token: string): Promise<any> => {
+    const res = await fetch(`${BACKEND_URL}/api/ai`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: token,
         },
+        body: JSON.stringify({ prompt }),
     });
-};
 
-// FIX: Add missing analyzeImage function for the image analyzer component.
-export const analyzeImage = async (prompt: string, image: File): Promise<string> => {
+    if (!res.ok) {
+        const msg = await res.text();
+        throw new Error("Błąd AI: " + msg);
+    }
+
+    const data = await res.json();
     try {
-        const ai = getAiInstance();
-        const imagePart = await fileToGenerativePart(image);
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [imagePart, { text: prompt }] },
-        });
-
-        return response.text;
-    } catch (error) {
-        console.error("Error analyzing image:", error);
-        throw new Error(parseGeminiError(error));
+        return JSON.parse(data.response);
+    } catch {
+        return data.response;
     }
 };
 
+// -------------------------------
+// 1️⃣ – Kategorie i tagi
+// -------------------------------
+export const generateCategoryAndTags = async (filename: string, token: string) => {
+    const prompt = `
+        Analizujesz nazwę pliku i tworzysz JSON:
+        { "youtubeCategory": "", "generalCategory": "", "primaryKeyword": "", "youtubeTags": [], "socialHashtags": [] }
+        
+        Nazwa pliku: "${filename}"
+    `;
+    return callAI(prompt, token);
+};
+
+// -------------------------------
+// 2️⃣ – Tytuły
+// -------------------------------
+export const generateTitlesFromFilename = async (
+    filename: string,
+    primaryKeyword: string,
+    token: string
+) => {
+    const prompt = `
+        Generujesz JSON:
+        { "youtubeTitles": [], "socialHeadline": "" }
+
+        Nazwa pliku: "${filename}"
+        Główne słowo kluczowe: "${primaryKeyword}"
+    `;
+    return callAI(prompt, token);
+};
+
+// -------------------------------
+// 3️⃣ – Plan publikacji
+// -------------------------------
+export const generatePublicationPlan = async (
+    title: string,
+    categories: string,
+    tone: string,
+    selectedMusic: any,
+    token: string
+) => {
+    const prompt = `
+        Generujesz plan publikacji w JSON:
+        { "schedule": [], "descriptions": [], "hashtags": [] }
+
+        Tytuł: "${title}"
+        Kategorie: "${categories}"
+        Ton: "${tone}"
+        Muzyka: "${selectedMusic ? selectedMusic.name : "brak"}"
+    `;
+    return callAI(prompt, token);
+};
+
+// -------------------------------
+// 4️⃣ – Wyszukiwanie muzyki
+// -------------------------------
+export const searchRoyaltyFreeMusic = async (
+    query: string,
+    videoDescription: string,
+    token: string
+) => {
+    const prompt = `
+        Zwróć JSON listę utworów:
+        [ { "name": "", "artist": "", "mood": "" } ]
+
+        Zapytanie: "${query}"
+        Opis wideo: "${videoDescription}"
+    `;
+    return callAI(prompt, token);
+};
+
+// -------------------------------
+// 5️⃣ – Analiza wyników publikacji
+// -------------------------------
 export const analyzePublicationPerformance = async (
     platform: string,
     title: string,
@@ -80,421 +110,68 @@ export const analyzePublicationPerformance = async (
     likes: number,
     comments: number,
     shares: number,
-    goal: string
-): Promise<PerformanceAnalysis> => {
+    goal: string,
+    token: string
+) => {
     const prompt = `
-        Jesteś ekspertem od analizy mediów społecznościowych. Twoim zadaniem jest ocena wyników publikacji i dostarczenie praktycznych wskazówek.
+        Zwróć JSON:
+        { "summary": "", "score": "", "positives": [], "improvements": [], "suggestions": [] }
 
-        Dane wejściowe:
-        - Platforma: ${platform}
-        - Tytuł/Opis: "${title}"
-        - Wyświetlenia/Zasięg: ${views}
-        - Polubienia: ${likes}
-        - Komentarze: ${comments}
-        - Udostępnienia: ${shares}
-        - Główny cel publikacji: ${goal}
-
-        Zadania do wykonania:
-        1.  **Analiza wskaźników:** Oblicz i zinterpretuj kluczowe wskaźniki (np. wskaźnik zaangażowania). Porównaj je z typowymi wynikami dla platformy ${platform}, biorąc pod uwagę cel (${goal}).
-        2.  **Identyfikacja mocnych stron:** Wskaż, co zadziałało dobrze.
-        3.  **Identyfikacja obszarów do poprawy:** Wskaż, co można było zrobić lepiej.
-        4.  **Generowanie sugestii:** Podaj 3-5 konkretnych, praktycznych porad, które pomogą autorowi osiągnąć lepsze wyniki w przyszłości.
-
-        Zwróć wynik w formacie JSON.
+        Platforma: ${platform}
+        Tytuł: ${title}
+        Views: ${views}, Likes: ${likes}, Comments: ${comments}, Shares: ${shares}
+        Cel: ${goal}
     `;
-    try {
-        const ai = getAiInstance();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING, description: "Krótkie, jednozdaniowe podsumowanie wyników." },
-                        score: { type: Type.STRING, description: "Jakościowa ocena, np. 'Doskonałe zaangażowanie'." },
-                        positives: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista 2-3 mocnych stron." },
-                        improvements: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista 2-3 obszarów do poprawy." },
-                        suggestions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista 3-5 praktycznych porad na przyszłość." },
-                    }
-                }
-            }
-        });
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as PerformanceAnalysis;
-    } catch (error) {
-        console.error("Error analyzing performance:", error);
-        throw new Error(parseGeminiError(error));
-    }
+    return callAI(prompt, token);
 };
 
-export const searchRoyaltyFreeMusic = async (query: string, videoDescription: string): Promise<MusicTrack[]> => {
-    const prompt = `
-        Jesteś kuratorem w obszernej bibliotece muzyki bez tantiem (royalty-free). Twoim zadaniem jest znalezienie 5 idealnie pasujących utworów muzycznych na podstawie zapytania użytkownika i opisu wideo.
-
-        -   **Opis wideo:** "${videoDescription}"
-        -   **Zapytanie użytkownika:** "${query}"
-
-        Wygeneruj listę 5 utworów. Dla każdego utworu podaj:
-        1.  \`name\`: Chwytliwą, fikcyjną nazwę utworu.
-        2.  \`artist\`: Fikcyjnego wykonawcę.
-        3.  \`mood\`: Krótki opis nastroju (np. "Spokojny, inspirujący", "Dynamiczny, epicki").
-
-        Zwróć wynik jako tablicę obiektów JSON.
-    `;
-
-    try {
-        const ai = getAiInstance();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            name: { type: Type.STRING },
-                            artist: { type: Type.STRING },
-                            mood: { type: Type.STRING }
-                        }
-                    }
-                }
-            }
-        });
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as MusicTrack[];
-    } catch (error) {
-        console.error("Error searching for music:", error);
-        throw new Error(parseGeminiError(error));
-    }
-};
-
-
-export const generateCategoryAndTags = async (filename: string): Promise<CategoryAndTags> => {
-    const prompt = `
-        Jesteś ekspertem od SEO na YouTube i w mediach społecznościowych. Twoim zadaniem jest przeanalizowanie nazwy pliku wideo i wygenerowanie kategorii, tagów i kluczowej frazy.
-
-        Nazwa Pliku: "${filename}"
-
-        Kroki do wykonania:
-        1.  **Ekstrakcja Tematu:** Zidentyfikuj główny obiekt lub temat z nazwy pliku.
-        2.  **Kategoryzacja Ogólna:** Określ ogólną, opisową kategorię treści (np. "Recenzja Technologiczna", "Vlog Kulinarny"). To będzie użyte do wypełnienia pola w formularzu.
-        3.  **Dopasowanie do YouTube:** Zasugeruj jedną, najbardziej pasującą oficjalną kategorię z listy YouTube (np. "Nauka i technika", "Poradniki i styl").
-        4.  **Generowanie Frazy Kluczowej:** Stwórz jedną, główną frazę kluczową typu "long-tail".
-        5.  **Generowanie Tagów YouTube:** Wygeneruj listę unikalnych tagów (łącznie do 500 znaków).
-        6.  **Generowanie Hasztagów Social Media:** Wygeneruj listę 10-15 optymalnych hasztagów dla TikTok/Instagram.
-
-        Zwróć wynik w formacie JSON.
-    `;
-    try {
-        const ai = getAiInstance();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        youtubeCategory: {
-                            type: Type.STRING,
-                            description: "Sugerowana, oficjalna kategoria wideo na YouTube."
-                        },
-                         generalCategory: {
-                            type: Type.STRING,
-                            description: "Ogólna, opisowa kategoria treści do użycia w formularzu."
-                        },
-                        primaryKeyword: {
-                            type: Type.STRING,
-                            description: "Główna fraza kluczowa (long-tail) do pozycjonowania."
-                        },
-                        youtubeTags: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING },
-                            description: "Lista tagów zoptymalizowanych dla YouTube."
-                        },
-                        socialHashtags: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING },
-                            description: "Lista hasztagów dla TikTok/Instagram."
-                        }
-                    }
-                }
-            }
-        });
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as CategoryAndTags;
-    } catch (error) {
-        console.error("Error generating categories and tags:", error);
-        throw new Error(parseGeminiError(error));
-    }
-};
-
-export const generateTitlesFromFilename = async (filename: string, primaryKeyword: string): Promise<TitleSuggestions> => {
-    const prompt = `
-        Jesteś ekspertem od SEO i marketingu wideo. Twoim zadaniem jest przekształcenie technicznej nazwy pliku wideo w angażujące tytuły, bazując na głównej frazie kluczowej.
-
-        Nazwa Pliku: "${filename}"
-        Główna Fraza Kluczowa: "${primaryKeyword}"
-
-        Instrukcje:
-        1.  **Analiza Nazwy Pliku i Frazy:** Zignoruj techniczne fragmenty w nazwie pliku. Skup się na głównym temacie.
-        2.  **Generowanie Tytułów na YouTube:** Stwórz 3 unikalne, chwytliwwe i zoptymalizowane pod SEO tytuły na YouTube (maksymalnie 100 znaków każdy). **Przynajmniej jeden z tytułów musi zawierać dokładną "Główną Frazę Kluczową", najlepiej na początku.**
-        3.  **Generowanie Nagłówka na Social Media:** Stwórz 1 krótki, dynamiczny nagłówek idealny na platformy takie jak TikTok, Instagram Reels i Facebook.
-
-        Zwróć wynik w formacie JSON.
-    `;
-    try {
-        const ai = getAiInstance();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        youtubeTitles: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING },
-                            description: "Trzy zoptymalizowane tytuły na YouTube."
-                        },
-                        socialHeadline: {
-                            type: Type.STRING,
-                            description: "Jeden chwytliwy nagłówek na TikTok/Instagram/Facebook."
-                        }
-                    }
-                }
-            }
-        });
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as TitleSuggestions;
-    } catch (error) {
-        console.error("Error generating titles:", error);
-        throw new Error(parseGeminiError(error));
-    }
-};
-
-
-export const generatePublicationPlan = async (
-    title: string,
-    categories: string,
-    tone: string,
-    selectedMusic: MusicTrack | null
-): Promise<PublicationPlan> => {
-    
-    let enhancements = [];
-    if (selectedMusic) {
-        if (selectedMusic.artist === 'Własny utwór') {
-            enhancements.push(`Wideo zawiera niestandardową muzykę w tle: "${selectedMusic.name}". Ważne: Głośność muzyki powinna być ustawiona na 5-10%, aby nie zagłuszać mowy.`);
-        } else {
-            enhancements.push(`Wideo zawiera muzykę w tle: "${selectedMusic.name}" autorstwa ${selectedMusic.artist}. Ważne: Głośność muzyki powinna być ustawiona na 5-10%, aby nie zagłuszać mowy.`);
-        }
-    }
-    const enhancementsText = enhancements.length > 0 ? `\nDodatkowe informacje o wideo: ${enhancements.join(' ')}` : '';
-
-    const prompt = `
-        Jesteś zaawansowanym Asystentem Publikacji Wideo AI. Twoim zadaniem jest stworzenie kompleksowego planu publikacji dla wideo.
-        
-        Dane wejściowe:
-        - Tytuł Roboczy: "${title}"
-        - Kategorie/Nisza: "${categories}"
-        - Preferowany Ton: "${tone}"
-        - Docelowe platformy: YouTube (Shorts/standard), TikTok, Instagram (Reels/Post), Facebook (Reels/Post).
-        ${enhancementsText}
-
-        Twoje zadania:
-        1.  **Analiza i Optymalizacja Metadanych:**
-            - Wygeneruj unikalne, zoptymalizowane pod SEO opisy dla każdej platformy (YT: do 5000 znaków, IG: do 2200, TT: do 250, FB: elastycznie). Jeśli to stosowne, wspomnij o muzyce.
-            - Stwórz 3 zestawy hasztagów (duże, średnie, małe) dla każdej platformy, maksymalizując ich potencjał.
-        2.  **Harmonogramowanie Publikacji:**
-            - Zaplanuj optymalny czas publikacji (data i godzina) dla każdej platformy, symulując analizę trendów i aktywności użytkowników w podanych kategoriach. Sugeruj daty w ciągu najbliższego tygodnia.
-        
-        Zwróć wynik w formacie JSON.
-    `;
-
-    try {
-        const ai = getAiInstance();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        schedule: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    platform: { type: Type.STRING },
-                                    time: { type: Type.STRING }
-                                }
-                            }
-                        },
-                        descriptions: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    platform: { type: Type.STRING },
-                                    text: { type: Type.STRING }
-                                }
-                            }
-                        },
-                        hashtags: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    platform: { type: Type.STRING },
-                                    sets: {
-                                        type: Type.OBJECT,
-                                        properties: {
-                                            large: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                            medium: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                            small: { type: Type.ARRAY, items: { type: Type.STRING } }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as PublicationPlan;
-
-    } catch (error) {
-        console.error("Error generating publication plan:", error);
-        throw new Error(parseGeminiError(error));
-    }
-};
-
+// -------------------------------
+// 6️⃣ – Generowanie miniatur (wysyłanie pliku)
+// -------------------------------
 export const generateThumbnails = async (
-    videoFrame: File, 
-    title: string, 
+    videoFrame: File,
+    title: string,
     overlayText: string,
-    logoFile?: File,
-    logoPosition?: string,
-    orientation: 'landscape' | 'portrait' = 'landscape',
-    textEffect: string = 'none',
-    imageFilter: string = 'none'
-): Promise<ThumbnailSuggestion[]> => {
+    orientation: "landscape" | "portrait",
+    textEffect: string,
+    imageFilter: string,
+    token: string
+) => {
+    const formData = new FormData();
+    formData.append("frame", videoFrame);
+    formData.append("title", title);
+    formData.append("overlayText", overlayText);
+    formData.append("orientation", orientation);
+    formData.append("textEffect", textEffect);
+    formData.append("imageFilter", imageFilter);
 
-    const orientationPrompt = orientation === 'landscape' 
-        ? "Miniaturka musi być w formacie poziomym (16:9)." 
-        : "Miniaturka musi być w formacie pionowym (9:16).";
+    const res = await fetch(`${BACKEND_URL}/api/generate-thumbnails`, {
+        method: "POST",
+        headers: { Authorization: token },
+        body: formData,
+    });
 
-    let textEffectPrompt = '';
-    switch (textEffect) {
-        case 'shadow': textEffectPrompt = 'Tekst powinien mieć subtelny cień, aby wyróżniał się na tle.'; break;
-        case 'outline': textEffectPrompt = 'Tekst powinien mieć cienki, kontrastujący obrys, aby był czytelny.'; break;
-        case 'glow': textEffectPrompt = 'Tekst powinien mieć delikatną poświatę, aby przyciągał wzrok.'; break;
-    }
+    if (!res.ok) throw new Error("Błąd generowania miniatur");
 
-    let imageFilterPrompt = '';
-    switch (imageFilter) {
-        case 'vibrant': imageFilterPrompt = 'Zastosuj filtr, aby kolory na obrazie były bardziej nasycone i żywe.'; break;
-        case 'grayscale': imageFilterPrompt = 'Przekształć obraz w stylową skalę szarości.'; break;
-        case 'vintage': imageFilterPrompt = 'Nadaj obrazowi wygląd retro/vintage, z ciepłymi tonami i lekkim ziarnem.'; break;
-        case 'high-contrast': imageFilterPrompt = 'Zwiększ kontrast obrazu, aby ciemne obszary były ciemniejsze, a jasne jaśniejsze.'; break;
-    }
-    
-    const basePrompt = `
-        Jesteś grafikiem i ekspertem od marketingu na YouTube. Twoim zadaniem jest stworzenie WARIANTU miniaturki do wideo na podstawie dostarczonego kadru (pierwszy obraz).
-        - Tytuł wideo: "${title}"
-        - Tekst do nałożenia (jeśli podany): "${overlayText || 'Wygeneruj automatycznie na podstawie tytułu'}"
-        ${logoFile ? `- Drugi obraz to logo klienta. Umieść je dyskretnie w rogu: ${logoPosition}.` : ''}
-        
-        Kluczowe Wymagania:
-        1.  **Orientacja:** ${orientationPrompt}
-        2.  **Baza:** Użyj pierwszego obrazu (klatki wideo) jako tła i głównego elementu.
-        3.  **Branding:** ${logoFile ? `Nałóż drugi obraz (logo) w rogu zgodnie z poleceniem.` : 'Brak logo do nałożenia.'}
-        4.  **Tekst:** Nałóż chwytliwy tekst na miniaturę. Użyj podanego tekstu lub stwórz własny, bazując na tytule. ${textEffectPrompt}
-        5.  **Filtry i Efekty:** ${imageFilterPrompt || 'Zachowaj naturalne kolory i styl obrazu.'}
-        
-        Zwróć JEDEN obraz oraz krótki opis stylu, który zastosowałeś.
-    `;
+    return res.json();
+};
 
-    const stylePrompts = [
-        "**Styl #1: Jaskrawy.** Użyj żywych kolorów, pogrubionej czcionki i wyraźnych konturów, aby maksymalnie przyciągnąć uwagę.",
-        "**Styl #2: Elegancki.** Postaw na minimalizm, czystą, nowoczesną typografię i stonowaną, harmonijną paletę barw.",
-        "**Styl #3: Dynamiczny.** Dodaj elementy graficzne jak strzałki, okręgi lub linie ruchu, aby stworzyć wrażenie akcji. Użyj energetycznego, chwytliwego tekstu."
-    ];
+// -------------------------------
+// 7️⃣ – Analiza obrazu (opcjonalne)
+// -------------------------------
+export const analyzeImage = async (prompt: string, file: File, token: string) => {
+    const formData = new FormData();
+    formData.append("frame", file);
+    formData.append("prompt", prompt);
 
+    const res = await fetch(`${BACKEND_URL}/api/analyze-image`, {
+        method: "POST",
+        headers: { Authorization: token },
+        body: formData,
+    });
 
-    try {
-        const ai = getAiInstance();
-        const framePart = await fileToGenerativePart(videoFrame);
-        const imageParts: (typeof framePart)[] = [framePart];
+    if (!res.ok) throw new Error("Błąd analizy obrazu");
 
-        if (logoFile) {
-            const logoPart = await fileToGenerativePart(logoFile);
-            imageParts.push(logoPart);
-        }
-
-        const blockReasons = new Set<string>();
-
-        const generationPromises = stylePrompts.map(async (stylePrompt, index) => {
-            const fullPrompt = `${basePrompt}\n${stylePrompt}`;
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts: [...imageParts, { text: fullPrompt }] },
-                config: {
-                    responseModalities: [Modality.IMAGE],
-                },
-            });
-
-            const responseParts = response.candidates?.[0]?.content?.parts;
-
-            if (!responseParts) {
-                if (response.promptFeedback?.blockReason) {
-                    blockReasons.add(response.promptFeedback.blockReason);
-                    console.error(`Generowanie wariantu ${index + 1} zablokowane: ${response.promptFeedback.blockReason}`);
-                }
-                console.warn(`Model nie wygenerował obrazu dla wariantu ${index + 1}.`);
-                return null;
-            }
-
-            let imageData: string | null = null;
-            let description: string = `Wariant ${index + 1}`;
-
-            for (const part of responseParts) {
-                if (part.inlineData) {
-                    imageData = part.inlineData.data;
-                } else if (part.text) {
-                    description = part.text;
-                }
-            }
-
-            if (imageData) {
-                return { description, imageData };
-            }
-            return null;
-        });
-        
-        const results = await Promise.all(generationPromises);
-        const suggestions = results.filter((r): r is ThumbnailSuggestion => r !== null);
-
-        if (suggestions.length === 0) {
-            if (blockReasons.size > 0) {
-                 throw new Error(`Model zablokował wygenerowanie obrazów z powodu: ${[...blockReasons].join(', ')}. Spróbuj zmienić tekst lub wybraną klatkę wideo.`);
-            }
-            throw new Error("Model nie wygenerował żadnych obrazów. Sprawdź, czy treść nie narusza zasad bezpieczeństwa lub spróbuj ponownie.");
-        }
-        
-        return suggestions;
-
-    } catch (error) {
-        console.error("Error generating thumbnails:", error);
-        throw new Error(parseGeminiError(error));
-    }
+    const data = await res.json();
+    return data.text;
 };
