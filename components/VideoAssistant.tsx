@@ -7,7 +7,7 @@ import { UploadIcon, LightBulbIcon, SparklesIcon, VideoCameraIcon, TagIcon, Musi
 type VideoOrientation = 'landscape' | 'portrait';
 type SocialPlatform = 'YouTube' | 'TikTok' | 'Instagram' | 'Facebook';
 
-const VideoAssistant: React.FC = () => {
+const VideoAssistant: React.FC<{ token: string }> = ({ token }) => {
   // Main Content State
   const [title, setTitle] = useState('');
   const [titleInput, setTitleInput] = useState(''); // State for direct input value for debouncing
