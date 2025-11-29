@@ -1,6 +1,3 @@
-// Frontend → Backend proxy
-// NIE używa Gemini SDK, NIE używa API_KEY — tylko wysyła dane do backendu.
-
 const BACKEND_URL = "https://asystem-ai-backend.onrender.com";
 
 // -------------------------------
@@ -29,9 +26,6 @@ const callAI = async (prompt: string, token: string): Promise<any> => {
     }
 };
 
-// -------------------------------
-// 1️⃣ – Kategorie i tagi
-// -------------------------------
 export const generateCategoryAndTags = async (filename: string, token: string) => {
     const prompt = `
         Analizujesz nazwę pliku i tworzysz JSON:
@@ -42,9 +36,6 @@ export const generateCategoryAndTags = async (filename: string, token: string) =
     return callAI(prompt, token);
 };
 
-// -------------------------------
-// 2️⃣ – Tytuły
-// -------------------------------
 export const generateTitlesFromFilename = async (
     filename: string,
     primaryKeyword: string,
@@ -60,9 +51,6 @@ export const generateTitlesFromFilename = async (
     return callAI(prompt, token);
 };
 
-// -------------------------------
-// 3️⃣ – Plan publikacji
-// -------------------------------
 export const generatePublicationPlan = async (
     title: string,
     categories: string,
@@ -82,9 +70,6 @@ export const generatePublicationPlan = async (
     return callAI(prompt, token);
 };
 
-// -------------------------------
-// 4️⃣ – Wyszukiwanie muzyki
-// -------------------------------
 export const searchRoyaltyFreeMusic = async (
     query: string,
     videoDescription: string,
@@ -100,9 +85,6 @@ export const searchRoyaltyFreeMusic = async (
     return callAI(prompt, token);
 };
 
-// -------------------------------
-// 5️⃣ – Analiza wyników publikacji
-// -------------------------------
 export const analyzePublicationPerformance = async (
     platform: string,
     title: string,
@@ -125,9 +107,6 @@ export const analyzePublicationPerformance = async (
     return callAI(prompt, token);
 };
 
-// -------------------------------
-// 6️⃣ – Generowanie miniatur (wysyłanie pliku)
-// -------------------------------
 export const generateThumbnails = async (
     videoFrame: File,
     title: string,
@@ -156,9 +135,6 @@ export const generateThumbnails = async (
     return res.json();
 };
 
-// -------------------------------
-// 7️⃣ – Analiza obrazu (opcjonalne)
-// -------------------------------
 export const analyzeImage = async (prompt: string, file: File, token: string) => {
     const formData = new FormData();
     formData.append("frame", file);
