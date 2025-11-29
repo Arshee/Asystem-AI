@@ -9,7 +9,7 @@ const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("assistant");
 
-  // Wczytaj token z localStorage przy starcie
+  // Pobranie tokenu przy starcie
   useEffect(() => {
     const saved = localStorage.getItem("authToken");
     if (saved) setToken(saved);
@@ -25,7 +25,7 @@ const App: React.FC = () => {
     setToken(null);
   };
 
-  // Jeśli nie ma tokena → pokaż login
+  // Jeśli nie zalogowany → pokaż ekran logowania
   if (!token) return <Login onLogin={handleLogin} />;
 
   const renderView = () => {
