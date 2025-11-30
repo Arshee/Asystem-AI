@@ -1,3 +1,4 @@
+
 // FIX: Add missing ChatMessage interface
 export interface ChatMessage {
   role: 'user' | 'model';
@@ -56,8 +57,8 @@ export interface MusicTrack {
 }
 
 export interface PerformanceAnalysis {
-  summary: string;
   score: string;
+  summary: string;
   positives: string[];
   improvements: string[];
   suggestions: string[];
