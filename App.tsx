@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import VideoAssistant from "./components/VideoAssistant";
 import PerformanceAnalyzer from "./components/PerformanceAnalyzer";
-import Login from "./components/Login";
 
 type ActiveView = "assistant" | "analyzer";
 
